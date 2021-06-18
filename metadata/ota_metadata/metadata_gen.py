@@ -5,7 +5,7 @@ import shutil
 from hashlib import sha256
 import argparse
 import pathlib
-import filecmp
+import igittigitt
 
 
 def _file_sha256(filename):
@@ -49,23 +49,39 @@ def _join_mode_uid_gid(base, path, nlink=False):
     return ",".join(_path_mode_uid_gid(base, path, nlink=nlink))
 
 
+def ignore_rules(target_dir, ignore_file):
+    parser = igittigitt.IgnoreParser()
+    with open(ignore_file) as f:
+        for line in f:
+            line = line.rstrip("\n")
+            parser.add_rule(line, base_path=target_dir)
+    return parser
+
+
 def gen_metadata(
-    target_dir, prefix, output_dir, directory_file, symlink_file, regular_file
+    target_dir,
+    prefix,
+    output_dir,
+    directory_file,
+    symlink_file,
+    regular_file,
+    ignore_file,
 ):
     p = pathlib.Path(target_dir)
-    dirs = [
-        str(f.relative_to(target_dir))
-        for f in p.glob("**/*")
-        if f.is_dir() and not f.is_symlink()
-    ]
-    symlinks = [
-        str(f.relative_to(target_dir)) for f in p.glob("**/*") if f.is_symlink()
-    ]
-    regulars = [
-        str(f.relative_to(target_dir))
-        for f in p.glob("**/*")
-        if f.is_file() and not f.is_symlink()
-    ]
+    target_abs = pathlib.Path(os.path.abspath(target_dir))
+    ignore = ignore_rules(target_dir, ignore_file)
+    dirs = []
+    symlinks = []
+    regulars = []
+    for f in p.glob("**/*"):
+        if ignore.match(target_abs / str(f.relative_to(target_dir))):
+            continue
+        if f.is_dir() and not f.is_symlink():
+            dirs.append(str(f.relative_to(target_dir)))
+        if f.is_symlink():
+            symlinks.append(str(f.relative_to(target_dir)))
+        if f.is_file() and not f.is_symlink():
+            regulars.append(str(f.relative_to(target_dir)))
 
     # dirs.txt
     # format:
@@ -116,6 +132,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--regular-file", help="regular file meta data.", default="regulars.txt"
     )
+    parser.add_argument(
+        "--ignore-file",
+        help="ignore file. file format is .gitignore.",
+        default="ignore.txt",
+    )
     args = parser.parse_args()
     gen_metadata(
         args.target_dir,
@@ -124,4 +145,5 @@ if __name__ == "__main__":
         directory_file=args.directory_file,
         symlink_file=args.symlink_file,
         regular_file=args.regular_file,
+        ignore_file=args.ignore_file,
     )
