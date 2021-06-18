@@ -1,0 +1,10 @@
+__pycache__/
+.git/
+.ssh/
+/boot/grub/
+/boot/ota/
+/boot/initrd.img-*.old-dkms
+/boot/initrd.img.old
+/boot/initrd.img
+/boot/vmlinuz.old
+/boot/vmlinuz
