@@ -1,1 +1,2 @@
 git+https://github.com/tier4/igittigitt.git#egg=igittigitt
+cryptography==3.4.7
