@@ -8,3 +8,5 @@ __pycache__/
 /boot/initrd.img
 /boot/vmlinuz.old
 /boot/vmlinuz
+/tmp
+/run
