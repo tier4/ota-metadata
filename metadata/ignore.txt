@@ -9,4 +9,4 @@ __pycache__/
 /boot/vmlinuz.old
 /boot/vmlinuz
 /tmp
-/run
+/run/*
