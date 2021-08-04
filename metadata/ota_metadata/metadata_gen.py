@@ -28,7 +28,7 @@ def _decapsulate(name):
 
 
 def _path_stat(base, path):
-    return os.lstat(os.path.join(base, path))
+    return os.lstat(os.path.join(base, path))  # NOTE: lstat doesn't follow symlink
 
 
 # return array of mode, uid and gid
