@@ -80,9 +80,10 @@ class RegularInf:
         self.path = _decapsulate(line[last:])
 
 
-def _gen_dirs(dst_dir, directory_file):
+def _gen_dirs(dst_dir, directory_file, progress):
     with open(directory_file) as f:
-        for l in tqdm(f.read().splitlines()):
+        lines = f.read().splitlines()
+        for l in tqdm(lines) if progress else lines:
             inf = DirectoryInf(l)
             target_path = f"{dst_dir}{inf.path}"
             os.makedirs(target_path, mode=int(inf.mode, 8))
@@ -90,9 +91,10 @@ def _gen_dirs(dst_dir, directory_file):
             os.chmod(target_path, int(inf.mode, 8))
 
 
-def _gen_symlinks(dst_dir, symlink_file):
+def _gen_symlinks(dst_dir, symlink_file, progress):
     with open(symlink_file) as f:
-        for l in tqdm(f.read().splitlines()):
+        lines = f.read().splitlines()
+        for l in tqdm(lines) if progress else lines:
             inf = SymbolicLinkInf(l)
             target_path = f"{dst_dir}{inf.slink}"
             os.symlink(inf.srcpath, target_path)
@@ -100,18 +102,23 @@ def _gen_symlinks(dst_dir, symlink_file):
             # NOTE: symlink file mode is always 0777 for linux system
 
 
-def _gen_regulars(dst_dir, regular_file, src_dir):
+def _gen_regulars(dst_dir, regular_file, src_dir, progress):
     with open(regular_file) as f:
-        for l in tqdm(f.read().splitlines()):
+        lines = f.read().splitlines()
+        links_dict = {}
+        for l in tqdm(lines) if progress else lines:
             inf = RegularInf(l)
-            src = f"{src_dir}{inf.path}"
             dst = f"{dst_dir}{inf.path}"
-            if inf.links >= 2:
-                os.link(src, dst, follow_symlinks=False)
-            else:
+            if inf.sha256hash not in links_dict:
+                src = f"{src_dir}{inf.path}"
                 shutil.copyfile(src, dst, follow_symlinks=False)
-            os.chown(dst, int(inf.uid), int(inf.gpid))
-            os.chmod(dst, int(inf.mode, 8))
+                os.chown(dst, int(inf.uid), int(inf.gpid))
+                os.chmod(dst, int(inf.mode, 8))
+                if inf.links >= 2:
+                    links_dict.setdefault(inf.sha256hash, dst)
+            else:
+                src = links_dict[inf.sha256hash]
+                os.link(src, dst, follow_symlinks=False)
 
 
 def gen_data(
@@ -120,6 +127,7 @@ def gen_data(
     directory_file,
     symlink_file,
     regular_file,
+    progress,
 ):
     dst_dir_norm = os.path.normpath(dst_dir)
     src_dir_norm = os.path.normpath(src_dir)
@@ -127,15 +135,16 @@ def gen_data(
         raise ValueError(f"dst({dst_dir_norm}) and src({src_dir_norm}) are same!")
     # mkdir dst
     os.makedirs(dst_dir_norm)  # should not exist.
-    _gen_dirs(dst_dir_norm, directory_file)
-    _gen_symlinks(dst_dir_norm, symlink_file)
-    _gen_regulars(dst_dir_norm, regular_file, src_dir_norm)
+    _gen_dirs(dst_dir_norm, directory_file, progress)
+    _gen_symlinks(dst_dir_norm, symlink_file, progress)
+    _gen_regulars(dst_dir_norm, regular_file, src_dir_norm, progress)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dst-dir", help="destination directory.", required=True)
     parser.add_argument("--src-dir", help="source directory.", required=True)
+    parser.add_argument("--progress", help="show progress.", action="store_true")
     parser.add_argument(
         "--directory-file", help="directory meta data.", default="dirs.txt"
     )
@@ -152,4 +161,5 @@ if __name__ == "__main__":
         directory_file=args.directory_file,
         symlink_file=args.symlink_file,
         regular_file=args.regular_file,
+        progress=args.progress,
     )
