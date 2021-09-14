@@ -1,5 +1,5 @@
 # ota-metadata
 ## Setup
 ```
-sudo pip3 install -r metadata/ota_metadata/requirements.txt
+sudo python3 -m pip install -r metadata/ota_metadata/requirements.txt
 ```
