@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-import shutil
 from hashlib import sha256
 import argparse
 import pathlib
@@ -74,8 +73,14 @@ def gen_metadata(
     symlinks = []
     regulars = []
     for f in p.glob("**/*"):
-        if ignore.match(target_abs / str(f.relative_to(target_dir))):
-            continue
+        try:
+            if ignore.match(target_abs / str(f.relative_to(target_dir))):
+                continue
+        except Exception as e:
+            if str(e).startswith("Symlink loop from"):
+                print(f"WARN: {e}")
+            else:
+                raise
         if f.is_dir() and not f.is_symlink():
             dirs.append(str(f.relative_to(target_dir)))
         if f.is_symlink():
