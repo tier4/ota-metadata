@@ -122,7 +122,7 @@ def gen_metadata(
     # regulars.txt
     # format:
     # mode,uid,gid,link number,sha256sum,'path/to/file'
-    # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file'
+    # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234
     with open(os.path.join(output_dir, regular_file), "w") as f:
         regular_list = [
             f"{_join_mode_uid_gid(target_dir, d, nlink=True)},"
