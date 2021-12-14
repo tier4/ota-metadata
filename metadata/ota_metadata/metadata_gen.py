@@ -70,6 +70,7 @@ def gen_metadata(
     directory_file,
     symlink_file,
     regular_file,
+    total_regular_size_file,
     ignore_file,
 ):
     p = pathlib.Path(target_dir)
@@ -123,15 +124,22 @@ def gen_metadata(
     # format:
     # mode,uid,gid,link number,sha256sum,'path/to/file'
     # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234
+    total_regular_size = 0
     with open(os.path.join(output_dir, regular_file), "w") as f:
-        regular_list = [
-            f"{_join_mode_uid_gid(target_dir, d, nlink=True)},"
-            f"{_file_sha256(os.path.join(target_dir, d))},"
-            f"{_encapsulate(d, prefix=prefix)},"
-            f"{os.path.getsize(os.path.join(target_dir, d))}"
-            for d in regulars
-        ]
+        regular_list = []
+        for d in regulars:
+            size = os.path.getsize(os.path.join(target_dir, d))
+            regular_list.append(
+                f"{_join_mode_uid_gid(target_dir, d, nlink=True)},"
+                f"{_file_sha256(os.path.join(target_dir, d))},"
+                f"{_encapsulate(d, prefix=prefix)},"
+                f"{os.path.getsize(os.path.join(target_dir, d))}"
+            )
+            total_regular_size += size
         f.writelines("\n".join(regular_list))
+
+    with open(os.path.join(output_dir, total_regular_size_file), "w") as f:
+        f.write(str(total_regular_size))
 
 
 if __name__ == "__main__":
@@ -149,6 +157,11 @@ if __name__ == "__main__":
         "--regular-file", help="regular file meta data.", default="regulars.txt"
     )
     parser.add_argument(
+        "--total-regular-size-file",
+        help="total regular file size.",
+        default="total_regular_size.txt",
+    )
+    parser.add_argument(
         "--ignore-file",
         help="ignore file. file format is .gitignore.",
         default="ignore.txt",
@@ -161,5 +174,6 @@ if __name__ == "__main__":
         directory_file=args.directory_file,
         symlink_file=args.symlink_file,
         regular_file=args.regular_file,
+        total_regular_size_file=args.total_regular_size_file,
         ignore_file=args.ignore_file,
     )
