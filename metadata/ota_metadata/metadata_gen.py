@@ -8,9 +8,15 @@ import igittigitt
 
 
 def _file_sha256(filename):
+    ONE_MB = 1048576
     with open(filename, "rb") as f:
-        digest = sha256(f.read()).hexdigest()
-        return digest
+        m = sha256()
+        while True:
+            d = f.read(ONE_MB)
+            if d == b"":
+                break
+            m.update(d)
+        return m.hexdigest()
 
 
 def _is_regular(path):
@@ -106,7 +112,9 @@ def gen_metadata(
     # NOTE: mode is always 0777.
     with open(os.path.join(output_dir, symlink_file), "w") as f:
         symlink_list = [
-            f"{_join_mode_uid_gid(target_dir, d)},{_encapsulate(d, prefix=prefix)},{_encapsulate(os.readlink(os.path.join(target_dir, d)))}"
+            f"{_join_mode_uid_gid(target_dir, d)},"
+            f"{_encapsulate(d, prefix=prefix)},"
+            f"{_encapsulate(os.readlink(os.path.join(target_dir, d)))}"
             for d in symlinks
         ]
         f.writelines("\n".join(symlink_list))
@@ -117,7 +125,10 @@ def gen_metadata(
     # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file'
     with open(os.path.join(output_dir, regular_file), "w") as f:
         regular_list = [
-            f"{_join_mode_uid_gid(target_dir, d, nlink=True)},{_file_sha256(os.path.join(target_dir, d))},{_encapsulate(d, prefix=prefix)}"
+            f"{_join_mode_uid_gid(target_dir, d, nlink=True)},"
+            f"{_file_sha256(os.path.join(target_dir, d))},"
+            f"{_encapsulate(d, prefix=prefix)},"
+            f"{os.path.getsize(os.path.join(target_dir, d))}"
             for d in regulars
         ]
         f.writelines("\n".join(regular_list))
