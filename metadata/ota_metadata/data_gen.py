@@ -115,7 +115,7 @@ def _gen_regulars(dst_dir, regular_file, src_dir, progress):
                 shutil.copyfile(src, dst, follow_symlinks=False)
                 os.chown(dst, inf.uid, inf.gid)
                 os.chmod(dst, inf.mode)
-                if inf.links >= 2:
+                if inf.nlink >= 2:
                     links_dict.setdefault(inf.sha256hash, dst)
             else:
                 src = links_dict[inf.sha256hash]
