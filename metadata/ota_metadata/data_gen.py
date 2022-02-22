@@ -88,7 +88,7 @@ def _gen_dirs(dst_dir, directory_file, progress):
             inf = DirectoryInf(l)
             target_path = f"{dst_dir}{inf.path}"
             os.makedirs(target_path, mode=inf.mode)
-            os.chown(target_path, inf.uid, inf.gpid)
+            os.chown(target_path, inf.uid, inf.gid)
             os.chmod(target_path, inf.mode)
 
 
@@ -99,7 +99,7 @@ def _gen_symlinks(dst_dir, symlink_file, progress):
             inf = SymbolicLinkInf(l)
             target_path = f"{dst_dir}{inf.slink}"
             os.symlink(inf.srcpath, target_path)
-            os.chown(target_path, inf.uid, inf.gpid, follow_symlinks=False)
+            os.chown(target_path, inf.uid, inf.gid, follow_symlinks=False)
             # NOTE: symlink file mode is always 0777 for linux system
 
 
@@ -113,7 +113,7 @@ def _gen_regulars(dst_dir, regular_file, src_dir, progress):
             if inf.sha256hash not in links_dict:
                 src = f"{src_dir}{inf.path}"
                 shutil.copyfile(src, dst, follow_symlinks=False)
-                os.chown(dst, inf.uid, inf.gpid)
+                os.chown(dst, inf.uid, inf.gid)
                 os.chmod(dst, inf.mode)
                 if inf.links >= 2:
                     links_dict.setdefault(inf.sha256hash, dst)
