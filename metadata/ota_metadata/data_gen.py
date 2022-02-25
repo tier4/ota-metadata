@@ -4,13 +4,9 @@ import os
 import shutil
 from hashlib import sha256
 import argparse
-import pathlib
 import re
+from pathlib import Path
 from tqdm import tqdm
-
-
-def _decapsulate(name):
-    return name[1:-1].replace("'\\''", "'")
 
 
 def _file_sha256(filename):
@@ -19,65 +15,70 @@ def _file_sha256(filename):
         return digest
 
 
-def _get_separated_strings(string, search, num):
-    arr = []
-    curr = 0
-    for i in range(num):
-        pos = string[curr:].find(search)
-        arr.append(string[curr : curr + pos])
-        curr += pos + 1
-    return arr, curr
+class _BaseInf:
+    _base_pattern = re.compile(
+        r"(?P<mode>\d+),(?P<uid>\d+),(?P<gid>\d+),(?P<left_over>.*)"
+    )
+
+    @staticmethod
+    def de_escape(s: str) -> str:
+        return s.replace(r"'\''", r"'")
+
+    def __init__(self, info: str):
+        match_res: re.Match = self._base_pattern.match(info.strip("\n"))
+        assert match_res is not None
+        self.mode = int(match_res.group("mode"), 8)
+        self.uid = int(match_res.group("uid"))
+        self.gid = int(match_res.group("gid"))
+
+        self._left: str = match_res.group("left_over")
 
 
-def _find_file_separate(string):
-    match = re.search(r"','(?!\\'')", string)  # find ',' not followed by \\''
-    return match.start()
-
-
-class DirectoryInf:
+class DirectoryInf(_BaseInf):
     """
     Directory file information class
     """
 
     def __init__(self, info):
-        line = info.replace("\n", "")
-        info_list, last = _get_separated_strings(line, ",", 3)
-        self.mode = info_list[0]
-        self.uid = info_list[1]
-        self.gpid = info_list[2]
-        self.path = _decapsulate(line[last:])
+        super().__init__(info)
+        self.path = Path(self.de_escape(self._left[1:-1]))
 
 
-class SymbolicLinkInf:
+class SymbolicLinkInf(_BaseInf):
     """
     Symbolik link information class
     """
 
+    _pattern = re.compile(r"'(?P<link>.+)((?<!\')',')(?P<target>.+)'")
+
     def __init__(self, info):
-        line = info.replace("\n", "")
-        info_list, last = _get_separated_strings(line, ",", 3)
-        self.mode = info_list[0]
-        self.uid = info_list[1]
-        self.gpid = info_list[2]
-        sep_pos = _find_file_separate(line)
-        self.slink = _decapsulate(line[last : sep_pos + 1])
-        self.srcpath = _decapsulate(line[sep_pos + 2 :])
+        super().__init__(info)
+        res = self._pattern.match(self._left)
+        assert res is not None
+        self.slink = Path(self.de_escape(res.group("link")))
+        self.srcpath = Path(self.de_escape(res.group("target")))
 
 
-class RegularInf:
+class RegularInf(_BaseInf):
     """
     Regular file information class
     """
 
+    _pattern = re.compile(
+        r"(?P<nlink>\d+),(?P<hash>\w+),'(?P<path>.+)',?(?P<size>\d+)?"
+    )
+
     def __init__(self, info):
-        line = info.replace("\n", "")
-        info_list, last = _get_separated_strings(line, ",", 5)
-        self.mode = info_list[0]
-        self.uid = info_list[1]
-        self.gpid = info_list[2]
-        self.links = int(info_list[3])
-        self.sha256hash = info_list[4]
-        self.path = _decapsulate(line[last:])
+        super().__init__(info)
+
+        res = self._pattern.match(self._left)
+        assert res is not None
+        self.nlink = int(res.group("nlink"))
+        self.sha256hash = res.group("hash")
+        self.path = Path(self.de_escape(res.group("path")))
+        # make sure that size might be None
+        size = res.group("size")
+        self.size = None if size is None else int(size)
 
 
 def _gen_dirs(dst_dir, directory_file, progress):
@@ -86,9 +87,9 @@ def _gen_dirs(dst_dir, directory_file, progress):
         for l in tqdm(lines) if progress else lines:
             inf = DirectoryInf(l)
             target_path = f"{dst_dir}{inf.path}"
-            os.makedirs(target_path, mode=int(inf.mode, 8))
-            os.chown(target_path, int(inf.uid), int(inf.gpid))
-            os.chmod(target_path, int(inf.mode, 8))
+            os.makedirs(target_path, mode=inf.mode)
+            os.chown(target_path, inf.uid, inf.gid)
+            os.chmod(target_path, inf.mode)
 
 
 def _gen_symlinks(dst_dir, symlink_file, progress):
@@ -98,7 +99,7 @@ def _gen_symlinks(dst_dir, symlink_file, progress):
             inf = SymbolicLinkInf(l)
             target_path = f"{dst_dir}{inf.slink}"
             os.symlink(inf.srcpath, target_path)
-            os.chown(target_path, int(inf.uid), int(inf.gpid), follow_symlinks=False)
+            os.chown(target_path, inf.uid, inf.gid, follow_symlinks=False)
             # NOTE: symlink file mode is always 0777 for linux system
 
 
@@ -112,9 +113,9 @@ def _gen_regulars(dst_dir, regular_file, src_dir, progress):
             if inf.sha256hash not in links_dict:
                 src = f"{src_dir}{inf.path}"
                 shutil.copyfile(src, dst, follow_symlinks=False)
-                os.chown(dst, int(inf.uid), int(inf.gpid))
-                os.chmod(dst, int(inf.mode, 8))
-                if inf.links >= 2:
+                os.chown(dst, inf.uid, inf.gid)
+                os.chmod(dst, inf.mode)
+                if inf.nlink >= 2:
                     links_dict.setdefault(inf.sha256hash, dst)
             else:
                 src = links_dict[inf.sha256hash]
