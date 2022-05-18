@@ -122,8 +122,8 @@ def gen_metadata(
 
     # regulars.txt
     # format:
-    # mode,uid,gid,link number,sha256sum,'path/to/file'
-    # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234
+    # mode,uid,gid,link number,sha256sum,'path/to/file',size,inode
+    # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234,12345678
     total_regular_size = 0
     with open(os.path.join(output_dir, regular_file), "w") as f:
         regular_list = []
@@ -133,7 +133,8 @@ def gen_metadata(
                 f"{_join_mode_uid_gid(target_dir, d, nlink=True)},"
                 f"{_file_sha256(os.path.join(target_dir, d))},"
                 f"{_encapsulate(d, prefix=prefix)},"
-                f"{os.path.getsize(os.path.join(target_dir, d))}"
+                f"{os.path.getsize(os.path.join(target_dir, d))},"
+                f"{os.stat(os.path.join(target_dir, d)).st_ino}"
             )
             total_regular_size += size
         f.writelines("\n".join(regular_list))
