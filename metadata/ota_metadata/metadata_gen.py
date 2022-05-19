@@ -129,12 +129,15 @@ def gen_metadata(
         regular_list = []
         for d in regulars:
             size = os.path.getsize(os.path.join(target_dir, d))
+            stat = os.stat(os.path.join(target_dir, d))
+            nlink = stat.st_nlink
+            inode = stat.st_ino if nlink > 1 else ""
             regular_list.append(
                 f"{_join_mode_uid_gid(target_dir, d, nlink=True)},"
                 f"{_file_sha256(os.path.join(target_dir, d))},"
                 f"{_encapsulate(d, prefix=prefix)},"
-                f"{os.path.getsize(os.path.join(target_dir, d))},"
-                f"{os.stat(os.path.join(target_dir, d)).st_ino}"
+                f"{size},"
+                f"{inode}"
             )
             total_regular_size += size
         f.writelines("\n".join(regular_list))
