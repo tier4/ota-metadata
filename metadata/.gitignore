@@ -5,3 +5,4 @@ persistents.txt
 privatekey.pem
 regulars.txt
 symlinks.txt
+total_regular_size.txt
