@@ -179,10 +179,18 @@ def gen_metadata(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("--target-dir", help="target directory.", required=True)
     parser.add_argument(
         "--compressed-dir", help="the directory to save compressed file."
+    )
+    parser.add_argument(
+        "--compress-ratio", help="compression ratio threshold", default=0.8
+    )
+    parser.add_argument(
+        "--compress-filesize",
+        help="lower bound size of file to be compressed",
+        default=512 * 1024,  # 512KiB
     )
     parser.add_argument("--prefix", help="file name prefix.", default="/")
     parser.add_argument("--output-dir", help="metadata output directory.", default=".")
