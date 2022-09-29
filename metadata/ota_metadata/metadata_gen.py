@@ -19,6 +19,8 @@ import os
 from hashlib import sha256
 import argparse
 import pathlib
+import io
+import pyzstd
 import igittigitt
 
 
@@ -80,6 +82,7 @@ def ignore_rules(target_dir, ignore_file):
 
 def gen_metadata(
     target_dir,
+    compressed_dir,
     prefix,
     output_dir,
     directory_file,
@@ -160,10 +163,27 @@ def gen_metadata(
     with open(os.path.join(output_dir, total_regular_size_file), "w") as f:
         f.write(str(total_regular_size))
 
+    # compression with zstd
+    if compressed_dir:
+        os.makedirs(compressed_dir, exist_ok=True)
+        for d in dirs:
+            os.makedirs(os.path.join(compressed_dir, d), exist_ok=True)
+        # compress an input file, and write to an output file.
+        for r in regulars:
+            src = os.path.join(target_dir, r)
+            dst = os.path.join(compressed_dir, r)
+            # print(f"{src=}, {dst=}")
+            with io.open(src, "rb") as ifh:
+                with io.open(dst, "wb") as ofh:
+                    pyzstd.compress_stream(ifh, ofh)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--target-dir", help="target directory.", required=True)
+    parser.add_argument(
+        "--compressed-dir", help="the directory to save compressed file."
+    )
     parser.add_argument("--prefix", help="file name prefix.", default="/")
     parser.add_argument("--output-dir", help="metadata output directory.", default=".")
     parser.add_argument(
@@ -188,6 +208,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     gen_metadata(
         args.target_dir,
+        args.compressed_dir,
         args.prefix,
         args.output_dir,
         directory_file=args.directory_file,
