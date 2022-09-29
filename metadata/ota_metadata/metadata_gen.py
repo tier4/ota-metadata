@@ -18,39 +18,39 @@
 import os
 import argparse
 import pathlib
-import io
 import zstandard
 import igittigitt
 from hashlib import sha256
 
-
+ZSTD_COMPRESSION_ALG = "zstd"
 ZSTD_COMPRESSION_LEVEL = 10
-ZSTD_MULTITHREAD = 2
+ZSTD_MULTITHREADS = 2
 CHUNK_SIZE = 4 * (1024**2)  # 4MiB
 
 
 def zstd_compress_file(
-    compressor_cctx: zstandard.ZstdCompressor,
+    cctx: zstandard.ZstdCompressor,
     src_fpath: str,
     dst_fpath: str,
     *,
     cmpr_ratio: float,
     filesize_threshold: int,
-):
+) -> bool:
     if os.path.getsize(src_fpath) < filesize_threshold:
-        return  # skip file with too small size
+        return False  # skip file with too small size
 
     uncompressed_bytes, compressed_bytes = 0, 0
     with open(src_fpath, "rb") as src_f, open(dst_fpath, "wb") as dst_f:
-        with compressor_cctx.stream_writer(dst_f) as compressor:
-            while data := src_f.read():
+        with cctx.stream_writer(dst_f) as compressor:
+            while data := src_f.read(CHUNK_SIZE):
                 uncompressed_bytes += len(data)
                 compressor.write(data)
             compressed_bytes = compressor.tell()
-
     # drop compressed file if cmpr ratio is too small
     if uncompressed_bytes / compressed_bytes < cmpr_ratio:
         os.remove(dst_fpath)
+        return False
+    return True
 
 
 def _file_sha256(filename):
@@ -119,6 +119,9 @@ def gen_metadata(
     regular_file,
     total_regular_size_file,
     ignore_file,
+    *,
+    cmpr_ratio: float,
+    filesize_threshold: int,
 ):
     p = pathlib.Path(target_dir)
     target_abs = pathlib.Path(os.path.abspath(target_dir))
@@ -167,10 +170,21 @@ def gen_metadata(
         ]
         f.writelines("\n".join(symlink_list))
 
+    # compression with zstd
+    #   store the compressed file with its original file's hash as name,
+    #   directly under the <compressed_dir>
+    compression_enabled = False
+    if compressed_dir:
+        os.makedirs(compressed_dir, exist_ok=True)
+        compression_enabled = True
+        cctx = zstandard.ZstdCompressor(
+            level=ZSTD_COMPRESSION_LEVEL, threads=ZSTD_MULTITHREADS
+        )
+
     # regulars.txt
     # format:
-    # mode,uid,gid,link number,sha256sum,'path/to/file',size,inode
-    # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234,12345678
+    # mode,uid,gid,link number,sha256sum,'path/to/file',size,inode[,compress_alg]
+    # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234,12345678[,zstd]
     total_regular_size = 0
     with open(os.path.join(output_dir, regular_file), "w") as f:
         regular_list = []
@@ -179,32 +193,33 @@ def gen_metadata(
             stat = os.stat(os.path.join(target_dir, d))
             nlink = stat.st_nlink
             inode = stat.st_ino if nlink > 1 else ""
+            sha256hash = _file_sha256(os.path.join(target_dir, d))
+
+            # if compression is enabled, try to compress the file here
+            compress_alg = ""
+            if compression_enabled:
+                if zstd_compress_file(
+                    cctx,
+                    os.path.join(target_dir, d),
+                    os.path.join(compressed_dir, sha256hash),
+                    cmpr_ratio=cmpr_ratio,
+                    filesize_threshold=filesize_threshold,
+                ):
+                    compress_alg = f",{ZSTD_COMPRESSION_ALG}"
+
             regular_list.append(
                 f"{_join_mode_uid_gid(target_dir, d, nlink=True)},"
-                f"{_file_sha256(os.path.join(target_dir, d))},"
+                f"{sha256hash},"
                 f"{_encapsulate(d, prefix=prefix)},"
                 f"{size},"
                 f"{inode}"
+                f"{compress_alg}"  # ensure the compress_alg is at the end
             )
             total_regular_size += size
         f.writelines("\n".join(regular_list))
 
     with open(os.path.join(output_dir, total_regular_size_file), "w") as f:
         f.write(str(total_regular_size))
-
-    # compression with zstd
-    if compressed_dir:
-        os.makedirs(compressed_dir, exist_ok=True)
-        for d in dirs:
-            os.makedirs(os.path.join(compressed_dir, d), exist_ok=True)
-        # compress an input file, and write to an output file.
-        for r in regulars:
-            src = os.path.join(target_dir, r)
-            dst = os.path.join(compressed_dir, r)
-            # print(f"{src=}, {dst=}")
-            with io.open(src, "rb") as ifh:
-                with io.open(dst, "wb") as ofh:
-                    pyzstd.compress_stream(ifh, ofh)
 
 
 if __name__ == "__main__":
@@ -214,12 +229,16 @@ if __name__ == "__main__":
         "--compressed-dir", help="the directory to save compressed file."
     )
     parser.add_argument(
-        "--compress-ratio", help="compression ratio threshold", default=5
+        "--compress-ratio",
+        help="compression ratio threshold",
+        default=5,
+        type=float,
     )
     parser.add_argument(
         "--compress-filesize",
         help="lower bound size of file to be compressed",
         default=512 * 1024,  # 512KiB
+        type=int,
     )
     parser.add_argument("--prefix", help="file name prefix.", default="/")
     parser.add_argument("--output-dir", help="metadata output directory.", default=".")
@@ -253,4 +272,6 @@ if __name__ == "__main__":
         regular_file=args.regular_file,
         total_regular_size_file=args.total_regular_size_file,
         ignore_file=args.ignore_file,
+        cmpr_ratio=args.compress_ratio,
+        filesize_threshold=args.compress_filesize,
     )
