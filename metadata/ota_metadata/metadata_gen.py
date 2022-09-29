@@ -16,12 +16,41 @@
 #!/usr/bin/env python3
 
 import os
-from hashlib import sha256
 import argparse
 import pathlib
 import io
-import pyzstd
+import zstandard
 import igittigitt
+from hashlib import sha256
+
+
+ZSTD_COMPRESSION_LEVEL = 10
+ZSTD_MULTITHREAD = 2
+CHUNK_SIZE = 4 * (1024**2)  # 4MiB
+
+
+def zstd_compress_file(
+    compressor_cctx: zstandard.ZstdCompressor,
+    src_fpath: str,
+    dst_fpath: str,
+    *,
+    cmpr_ratio: float,
+    filesize_threshold: int,
+):
+    if os.path.getsize(src_fpath) < filesize_threshold:
+        return  # skip file with too small size
+
+    uncompressed_bytes, compressed_bytes = 0, 0
+    with open(src_fpath, "rb") as src_f, open(dst_fpath, "wb") as dst_f:
+        with compressor_cctx.stream_writer(dst_f) as compressor:
+            while data := src_f.read():
+                uncompressed_bytes += len(data)
+                compressor.write(data)
+            compressed_bytes = compressor.tell()
+
+    # drop compressed file if cmpr ratio is too small
+    if uncompressed_bytes / compressed_bytes < cmpr_ratio:
+        os.remove(dst_fpath)
 
 
 def _file_sha256(filename):
@@ -185,7 +214,7 @@ if __name__ == "__main__":
         "--compressed-dir", help="the directory to save compressed file."
     )
     parser.add_argument(
-        "--compress-ratio", help="compression ratio threshold", default=0.8
+        "--compress-ratio", help="compression ratio threshold", default=5
     )
     parser.add_argument(
         "--compress-filesize",
