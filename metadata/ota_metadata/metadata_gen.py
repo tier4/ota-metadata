@@ -223,7 +223,9 @@ def gen_metadata(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument("--target-dir", help="target directory.", required=True)
     parser.add_argument(
         "--compressed-dir", help="the directory to save compressed file."
