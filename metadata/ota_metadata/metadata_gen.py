@@ -26,6 +26,10 @@ ZSTD_MULTITHREADS = 2
 CHUNK_SIZE = 4 * (1024**2)  # 4MiB
 
 
+class ZstdSkipFile(Exception):
+    pass
+
+
 def zstd_compress_file(
     cctx: zstandard.ZstdCompressor,
     src_fpath: str,
@@ -46,7 +50,7 @@ def zstd_compress_file(
             not (compressed_bytes := os.path.getsize(dst_fpath))
             or src_size / compressed_bytes < cmpr_ratio
         ):
-            raise ValueError
+            raise ZstdSkipFile
         return True
     except Exception:  # cleanup on failure
         try:
@@ -197,7 +201,6 @@ def gen_metadata(
             sha256hash = _file_sha256(os.path.join(target_dir, d))
 
             # if compression is enabled, try to compress the file here
-            compress_alg = ""
             if compressed_dir and zstd_compress_file(
                 cctx,  # type: ignore
                 os.path.join(target_dir, d),
@@ -206,6 +209,8 @@ def gen_metadata(
                 filesize_threshold=filesize_threshold,
             ):
                 compress_alg = ZSTD_COMPRESSION_ALG
+            else:
+                compress_alg = ""
 
             regular_list.append(
                 f"{_join_mode_uid_gid(target_dir, d, nlink=True)},"
