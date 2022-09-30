@@ -49,7 +49,10 @@ def zstd_compress_file(
             raise ValueError
         return True
     except Exception:  # cleanup on failure
-        os.remove(dst_fpath)
+        try:
+            os.remove(dst_fpath)
+        except OSError:
+            pass
         return False
 
 
