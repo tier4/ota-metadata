@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+#
 # Copyright 2022 TIER IV, INC. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,10 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-
-#!/usr/bin/env python3
-
 import os
 import argparse
 import pathlib
@@ -183,8 +181,8 @@ def gen_metadata(
 
     # regulars.txt
     # format:
-    # mode,uid,gid,link number,sha256sum,'path/to/file',size,inode[,compress_alg]
-    # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234,12345678[,zstd]
+    # mode,uid,gid,link number,sha256sum,'path/to/file',size,inode,[compress_alg]
+    # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234,12345678,[zstd]
     total_regular_size = 0
     with open(os.path.join(output_dir, regular_file), "w") as f:
         regular_list = []
@@ -232,13 +230,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--compress-ratio",
         help="compression ratio threshold",
-        default=5,
+        default=1.25,  # uncompressed/compressed = 1.25
         type=float,
     )
     parser.add_argument(
         "--compress-filesize",
         help="lower bound size of file to be compressed",
-        default=512 * 1024,  # 512KiB
+        default=16 * 1024,  # 16KiB
         type=int,
     )
     parser.add_argument("--prefix", help="file name prefix.", default="/")
