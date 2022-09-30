@@ -36,21 +36,23 @@ def zstd_compress_file(
     cmpr_ratio: float,
     filesize_threshold: int,
 ) -> bool:
-    if os.path.getsize(src_fpath) < filesize_threshold:
+    if (uncompressed_size := os.path.getsize(src_fpath)) < filesize_threshold:
         return False  # skip file with too small size
-
-    uncompressed_bytes, compressed_bytes = 0, 0
-    with open(src_fpath, "rb") as src_f, open(dst_fpath, "wb") as dst_f:
-        with cctx.stream_writer(dst_f) as compressor:
-            while data := src_f.read(CHUNK_SIZE):
-                uncompressed_bytes += len(data)
-                compressor.write(data)
-            compressed_bytes = compressor.tell()
-    # drop compressed file if cmpr ratio is too small
-    if uncompressed_bytes / compressed_bytes < cmpr_ratio:
+    try:
+        with open(src_fpath, "rb") as src_f, open(dst_fpath, "wb") as dst_f:
+            with cctx.stream_writer(dst_f) as compressor:
+                while data := src_f.read(CHUNK_SIZE):
+                    compressor.write(data)
+        # drop compressed file if cmpr ratio is too small or compressed failed
+        if (
+            not (compressed_bytes := os.path.getsize(dst_fpath))
+            or uncompressed_size / compressed_bytes < cmpr_ratio
+        ):
+            raise ValueError
+        return True
+    except Exception:  # cleanup on failure
         os.remove(dst_fpath)
         return False
-    return True
 
 
 def _file_sha256(filename):
