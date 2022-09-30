@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+#
 # Copyright 2022 TIER IV, INC. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,15 +13,46 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-
-#!/usr/bin/env python3
-
 import os
-from hashlib import sha256
 import argparse
 import pathlib
+import zstandard
 import igittigitt
+from hashlib import sha256
+
+ZSTD_COMPRESSION_EXTENSION = "zst"
+ZSTD_COMPRESSION_LEVEL = 10
+ZSTD_MULTITHREADS = 2
+CHUNK_SIZE = 4 * (1024**2)  # 4MiB
+
+
+def zstd_compress_file(
+    cctx: zstandard.ZstdCompressor,
+    src_fpath: str,
+    dst_fpath: str,
+    *,
+    cmpr_ratio: float,
+    filesize_threshold: int,
+) -> bool:
+    if (src_size := os.path.getsize(src_fpath)) < filesize_threshold:
+        return False  # skip file with too small size
+    # NOTE: interrupt the whole process if compression failed
+    with open(src_fpath, "rb") as src_f, open(dst_fpath, "wb") as dst_f:
+        with cctx.stream_writer(dst_f, size=src_size) as compressor:
+            while data := src_f.read(CHUNK_SIZE):
+                compressor.write(data)
+    # drop compressed file if cmpr ratio is too small or compressed failed
+    if (
+        not (compressed_bytes := os.path.getsize(dst_fpath))
+        or src_size / compressed_bytes < cmpr_ratio
+    ):
+        try:
+            os.remove(dst_fpath)
+        except OSError:
+            pass
+        return False
+    # everything is fine, return True here
+    return True
 
 
 def _file_sha256(filename):
@@ -80,6 +113,7 @@ def ignore_rules(target_dir, ignore_file):
 
 def gen_metadata(
     target_dir,
+    compressed_dir,
     prefix,
     output_dir,
     directory_file,
@@ -87,6 +121,9 @@ def gen_metadata(
     regular_file,
     total_regular_size_file,
     ignore_file,
+    *,
+    cmpr_ratio: float,
+    filesize_threshold: int,
 ):
     p = pathlib.Path(target_dir)
     target_abs = pathlib.Path(os.path.abspath(target_dir))
@@ -135,10 +172,19 @@ def gen_metadata(
         ]
         f.writelines("\n".join(symlink_list))
 
+    # compression with zstd
+    #   store the compressed file with its original file's hash and .zstd ext as name,
+    #   directly under the <compressed_dir>
+    if compressed_dir:
+        os.makedirs(compressed_dir, exist_ok=True)
+        cctx = zstandard.ZstdCompressor(
+            level=ZSTD_COMPRESSION_LEVEL, threads=ZSTD_MULTITHREADS
+        )
+
     # regulars.txt
     # format:
-    # mode,uid,gid,link number,sha256sum,'path/to/file',size,inode
-    # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234,12345678
+    # mode,uid,gid,link number,sha256sum,'path/to/file',size,inode,[compress_alg]
+    # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234,12345678,[zst]
     total_regular_size = 0
     with open(os.path.join(output_dir, regular_file), "w") as f:
         regular_list = []
@@ -147,12 +193,32 @@ def gen_metadata(
             stat = os.stat(os.path.join(target_dir, d))
             nlink = stat.st_nlink
             inode = stat.st_ino if nlink > 1 else ""
+            sha256hash = _file_sha256(os.path.join(target_dir, d))
+
+            # if compression is enabled, try to compress the file here
+            compress_alg = ""
+            if compressed_dir:
+                src_f = os.path.join(target_dir, d)
+                dst_f = os.path.join(
+                    compressed_dir, f"{sha256hash}.{ZSTD_COMPRESSION_EXTENSION}"
+                )  # add zstd extension to filename
+                # NOTE: skip already compressed file
+                if os.path.exists(dst_f) or zstd_compress_file(
+                    cctx,  # type: ignore
+                    src_f,
+                    dst_f,
+                    cmpr_ratio=cmpr_ratio,
+                    filesize_threshold=filesize_threshold,
+                ):
+                    compress_alg = ZSTD_COMPRESSION_EXTENSION
+
             regular_list.append(
                 f"{_join_mode_uid_gid(target_dir, d, nlink=True)},"
-                f"{_file_sha256(os.path.join(target_dir, d))},"
+                f"{sha256hash},"
                 f"{_encapsulate(d, prefix=prefix)},"
                 f"{size},"
-                f"{inode}"
+                f"{inode},"
+                f"{compress_alg}"  # ensure the compress_alg is at the end
             )
             total_regular_size += size
         f.writelines("\n".join(regular_list))
@@ -162,8 +228,25 @@ def gen_metadata(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument("--target-dir", help="target directory.", required=True)
+    parser.add_argument(
+        "--compressed-dir", help="the directory to save compressed file."
+    )
+    parser.add_argument(
+        "--compress-ratio",
+        help="compression ratio threshold",
+        default=1.25,  # uncompressed/compressed = 1.25
+        type=float,
+    )
+    parser.add_argument(
+        "--compress-filesize",
+        help="lower bound size of file to be compressed",
+        default=16 * 1024,  # 16KiB
+        type=int,
+    )
     parser.add_argument("--prefix", help="file name prefix.", default="/")
     parser.add_argument("--output-dir", help="metadata output directory.", default=".")
     parser.add_argument(
@@ -188,6 +271,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     gen_metadata(
         args.target_dir,
+        args.compressed_dir,
         args.prefix,
         args.output_dir,
         directory_file=args.directory_file,
@@ -195,4 +279,6 @@ if __name__ == "__main__":
         regular_file=args.regular_file,
         total_regular_size_file=args.total_regular_size_file,
         ignore_file=args.ignore_file,
+        cmpr_ratio=args.compress_ratio,
+        filesize_threshold=args.compress_filesize,
     )

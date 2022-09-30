@@ -48,6 +48,7 @@ def gen_payload(
     rootfs_directory,
     certificate_file,
     total_regular_size_file,
+    compressed_rootfs_directory,
 ):
     payload = [
         {"version": 1},
@@ -67,6 +68,8 @@ def gen_payload(
     if isfile(total_regular_size_file):
         total_regular_size = open(total_regular_size_file).read()
         payload.append({"total_regular_size": total_regular_size})
+    if compressed_rootfs_directory:
+        payload.append({"compressed_rootfs_directory": compressed_rootfs_directory})
     return urlsafe_b64encode(json.dumps(payload))
 
 
@@ -85,6 +88,7 @@ def sign_metadata(
     sign_key_file,
     cert_file,
     total_regular_size_file,
+    compressed_rootfs_directory,
     output_file,
 ):
     header = gen_header()
@@ -96,6 +100,7 @@ def sign_metadata(
         rootfs_directory,
         cert_file,
         total_regular_size_file,
+        compressed_rootfs_directory,
     )
     signature = sign(sign_key_file, f"{header}.{payload}")
     with open(output_file, "w") as f:
@@ -120,6 +125,9 @@ if __name__ == "__main__":
         "--rootfs-directory", help="rootfs directory.", default="rootfs"
     )
     parser.add_argument(
+        "--compressed-rootfs-directory", help="compressed rootfs directory.",
+    )
+    parser.add_argument(
         "--persistent-file", help="persistent file meta data.", required=True
     )
     parser.add_argument(
@@ -134,6 +142,7 @@ if __name__ == "__main__":
         regular_file=args.regular_file,
         persistent_file=args.persistent_file,
         rootfs_directory=args.rootfs_directory,
+        compressed_rootfs_directory=args.compressed_rootfs_directory,
         sign_key_file=args.sign_key,
         cert_file=args.cert_file,
         total_regular_size_file=args.total_regular_size_file,
