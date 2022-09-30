@@ -26,10 +26,6 @@ ZSTD_MULTITHREADS = 2
 CHUNK_SIZE = 4 * (1024**2)  # 4MiB
 
 
-class ZstdSkipFile(Exception):
-    pass
-
-
 def zstd_compress_file(
     cctx: zstandard.ZstdCompressor,
     src_fpath: str,
@@ -40,24 +36,30 @@ def zstd_compress_file(
 ) -> bool:
     if (src_size := os.path.getsize(src_fpath)) < filesize_threshold:
         return False  # skip file with too small size
+
     try:
         with open(src_fpath, "rb") as src_f, open(dst_fpath, "wb") as dst_f:
             with cctx.stream_writer(dst_f, size=src_size) as compressor:
                 while data := src_f.read(CHUNK_SIZE):
                     compressor.write(data)
-        # drop compressed file if cmpr ratio is too small or compressed failed
-        if (
-            not (compressed_bytes := os.path.getsize(dst_fpath))
-            or src_size / compressed_bytes < cmpr_ratio
-        ):
-            raise ZstdSkipFile
-        return True
     except Exception:  # cleanup on failure
         try:
             os.remove(dst_fpath)
         except OSError:
             pass
         return False
+    # drop compressed file if cmpr ratio is too small or compressed failed
+    if (
+        not (compressed_bytes := os.path.getsize(dst_fpath))
+        or src_size / compressed_bytes < cmpr_ratio
+    ):
+        try:
+            os.remove(dst_fpath)
+        except OSError:
+            pass
+        return False
+    # everything is fine, return True here
+    return True
 
 
 def _file_sha256(filename):
