@@ -20,7 +20,7 @@ import zstandard
 import igittigitt
 from hashlib import sha256
 
-ZSTD_COMPRESSION_ALG = "zstd"
+ZSTD_COMPRESSION_EXTENSION = "zst"
 ZSTD_COMPRESSION_LEVEL = 10
 ZSTD_MULTITHREADS = 2
 CHUNK_SIZE = 4 * (1024**2)  # 4MiB
@@ -189,7 +189,7 @@ def gen_metadata(
     # regulars.txt
     # format:
     # mode,uid,gid,link number,sha256sum,'path/to/file',size,inode,[compress_alg]
-    # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234,12345678,[zstd]
+    # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234,12345678,[zst]
     total_regular_size = 0
     with open(os.path.join(output_dir, regular_file), "w") as f:
         regular_list = []
@@ -201,16 +201,21 @@ def gen_metadata(
             sha256hash = _file_sha256(os.path.join(target_dir, d))
 
             # if compression is enabled, try to compress the file here
-            if compressed_dir and zstd_compress_file(
-                cctx,  # type: ignore
-                os.path.join(target_dir, d),
-                os.path.join(compressed_dir, f"{sha256hash}.{ZSTD_COMPRESSION_ALG}"),
-                cmpr_ratio=cmpr_ratio,
-                filesize_threshold=filesize_threshold,
-            ):
-                compress_alg = ZSTD_COMPRESSION_ALG
-            else:
-                compress_alg = ""
+            compress_alg = ""
+            if compressed_dir:
+                src_f = os.path.join(target_dir, d)
+                dst_f = os.path.join(
+                    compressed_dir, f"{sha256hash}.{ZSTD_COMPRESSION_EXTENSION}"
+                )  # add zstd extension to filename
+                # NOTE: skip already compressed file
+                if os.path.exists(dst_f) or zstd_compress_file(
+                    cctx,  # type: ignore
+                    src_f,
+                    dst_f,
+                    cmpr_ratio=cmpr_ratio,
+                    filesize_threshold=filesize_threshold,
+                ):
+                    compress_alg = ZSTD_COMPRESSION_EXTENSION
 
             regular_list.append(
                 f"{_join_mode_uid_gid(target_dir, d, nlink=True)},"
