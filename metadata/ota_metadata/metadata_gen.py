@@ -173,12 +173,10 @@ def gen_metadata(
         f.writelines("\n".join(symlink_list))
 
     # compression with zstd
-    #   store the compressed file with its original file's hash as name,
+    #   store the compressed file with its original file's hash and .zstd ext as name,
     #   directly under the <compressed_dir>
-    compression_enabled = False
     if compressed_dir:
         os.makedirs(compressed_dir, exist_ok=True)
-        compression_enabled = True
         cctx = zstandard.ZstdCompressor(
             level=ZSTD_COMPRESSION_LEVEL, threads=ZSTD_MULTITHREADS
         )
@@ -199,22 +197,21 @@ def gen_metadata(
 
             # if compression is enabled, try to compress the file here
             compress_alg = ""
-            if compression_enabled:
-                if zstd_compress_file(
-                    cctx,
-                    os.path.join(target_dir, d),
-                    os.path.join(compressed_dir, sha256hash),
-                    cmpr_ratio=cmpr_ratio,
-                    filesize_threshold=filesize_threshold,
-                ):
-                    compress_alg = f",{ZSTD_COMPRESSION_ALG}"
+            if compressed_dir and zstd_compress_file(
+                cctx,  # type: ignore
+                os.path.join(target_dir, d),
+                os.path.join(compressed_dir, f"{sha256hash}.{ZSTD_COMPRESSION_ALG}"),
+                cmpr_ratio=cmpr_ratio,
+                filesize_threshold=filesize_threshold,
+            ):
+                compress_alg = ZSTD_COMPRESSION_ALG
 
             regular_list.append(
                 f"{_join_mode_uid_gid(target_dir, d, nlink=True)},"
                 f"{sha256hash},"
                 f"{_encapsulate(d, prefix=prefix)},"
                 f"{size},"
-                f"{inode}"
+                f"{inode},"
                 f"{compress_alg}"  # ensure the compress_alg is at the end
             )
             total_regular_size += size
