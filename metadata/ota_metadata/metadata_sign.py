@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Copyright 2022 TIER IV, INC. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +15,6 @@
 # limitations under the License.
 
 
-#!/usr/bin/env python3
 from os.path import basename, isfile
 from hashlib import sha256
 import base64
@@ -125,7 +126,8 @@ if __name__ == "__main__":
         "--rootfs-directory", help="rootfs directory.", default="rootfs"
     )
     parser.add_argument(
-        "--compressed-rootfs-directory", help="compressed rootfs directory.",
+        "--compressed-rootfs-directory",
+        help="compressed rootfs directory.",
     )
     parser.add_argument(
         "--persistent-file", help="persistent file meta data.", required=True
