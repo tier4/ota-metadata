@@ -80,7 +80,8 @@ class RegularInf(_BaseInf):
     """
 
     _pattern = re.compile(
-        r"(?P<nlink>\d+),(?P<hash>\w+),'(?P<path>.+)',?(?P<size>\d+)?"
+        r"(?P<nlink>\d+),(?P<hash>\w+),'(?P<path>.+)'"
+        r"(,(?P<size>\d+)?(,(?P<inode>\d+)?(,(?P<compressed_alg>\w+)?)?)?)?"
     )
 
     def __init__(self, info):
@@ -94,6 +95,8 @@ class RegularInf(_BaseInf):
         # make sure that size might be None
         size = res.group("size")
         self.size = None if size is None else int(size)
+        self.inode = res.group("inode")
+        self.compressed_alg = res.group("compressed_alg")
 
 
 def _gen_dirs(dst_dir, directory_file, progress):
@@ -124,16 +127,17 @@ def _gen_regulars(dst_dir, regular_file, src_dir, progress):
         links_dict = {}
         for l in tqdm(lines) if progress else lines:
             inf = RegularInf(l)
+            links_key = inf.inode if inf.inode is not None else inf.sha256hash
             dst = f"{dst_dir}{inf.path}"
-            if inf.sha256hash not in links_dict:
+            if links_key not in links_dict:
                 src = f"{src_dir}{inf.path}"
                 shutil.copyfile(src, dst, follow_symlinks=False)
                 os.chown(dst, inf.uid, inf.gid)
                 os.chmod(dst, inf.mode)
                 if inf.nlink >= 2:
-                    links_dict.setdefault(inf.sha256hash, dst)
+                    links_dict.setdefault(links_key, dst)
             else:
-                src = links_dict[inf.sha256hash]
+                src = links_dict[links_key]
                 os.link(src, dst, follow_symlinks=False)
 
 
@@ -150,7 +154,9 @@ def gen_data(
     if dst_dir_norm == src_dir_norm:
         raise ValueError(f"dst({dst_dir_norm}) and src({src_dir_norm}) are same!")
     # mkdir dst
-    os.makedirs(dst_dir_norm)  # should not exist.
+    os.makedirs(dst_dir_norm, exist_ok=True)
+    if len(os.listdir(dst_dir_norm)) != 0:
+        raise ValueError(f"dst({dst_dir_norm}) is not empty dir.")
     _gen_dirs(dst_dir_norm, directory_file, progress)
     _gen_symlinks(dst_dir_norm, symlink_file, progress)
     _gen_regulars(dst_dir_norm, regular_file, src_dir_norm, progress)
