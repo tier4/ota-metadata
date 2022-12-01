@@ -154,7 +154,9 @@ def gen_data(
     if dst_dir_norm == src_dir_norm:
         raise ValueError(f"dst({dst_dir_norm}) and src({src_dir_norm}) are same!")
     # mkdir dst
-    os.makedirs(dst_dir_norm)  # should not exist.
+    os.makedirs(dst_dir_norm, exist_ok=True)
+    if len(os.listdir(dst_dir_norm)) != 0:
+        raise ValueError(f"dst({dst_dir_norm}) is not empty dir.")
     _gen_dirs(dst_dir_norm, directory_file, progress)
     _gen_symlinks(dst_dir_norm, symlink_file, progress)
     _gen_regulars(dst_dir_norm, regular_file, src_dir_norm, progress)
