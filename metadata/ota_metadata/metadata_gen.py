@@ -13,12 +13,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+
 import os
+import re
+import glob
 import argparse
-import pathlib
 import zstandard
 import igittigitt
 from hashlib import sha256
+from pathlib import Path
+from packaging import version
+from functools import cmp_to_key
 
 ZSTD_COMPRESSION_EXTENSION = "zst"
 ZSTD_COMPRESSION_LEVEL = 10
@@ -111,6 +117,54 @@ def ignore_rules(target_dir, ignore_file):
     return parser
 
 
+def _get_latest_kernel_version(boot_dir: Path):
+    kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
+
+    pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
+
+    def compare(l, r):
+        ma_l = pa.match(Path(l).name)
+        ma_r = pa.match(Path(r).name)
+        ver_l = version.parse(ma_l["version"])
+        ver_r = version.parse(ma_r["version"])
+        return 1 if ver_l > ver_r else -1
+
+    kfile_glob = [f for f in glob.glob(kfiles_path) if not Path(f).is_symlink()]
+    kfiles = sorted(kfile_glob, key=cmp_to_key(compare), reverse=True)
+
+    return Path(kfiles[0])  # latest
+
+
+def _list_non_latest_kernels(boot_dir: Path):
+    kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
+    ifiles_path = str(boot_dir / "initrd.img-*.*.*-*-*")
+    sfiles_path = str(boot_dir / "System.map-*.*.*-*-*")
+    cfiles_path = str(boot_dir / "config-*.*.*-*-*")
+
+    kfile_glob = [f for f in glob.glob(kfiles_path) if not Path(f).is_symlink()]
+    ifile_glob = [f for f in glob.glob(ifiles_path) if not Path(f).is_symlink()]
+    sfile_glob = [f for f in glob.glob(sfiles_path) if not Path(f).is_symlink()]
+    cfile_glob = [f for f in glob.glob(cfiles_path) if not Path(f).is_symlink()]
+
+    pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
+    vmlinuz = _get_latest_kernel_version(boot_dir)
+    k_ma = pa.match(vmlinuz.name)
+    ver = k_ma["version"]  # type: ignore
+    suf = k_ma["suffix"]  # type: ignore
+    initrd_img = vmlinuz.parent / f"initrd.img-{ver}{suf}"
+    system_map = vmlinuz.parent / f"System.map-{ver}{suf}"
+    config = vmlinuz.parent / f"config-{ver}{suf}"
+
+    if str(initrd_img) not in ifile_glob:  # initrd.img-{ver}{suf} must exist.
+        raise Exception(f"{initrd_img} doesn't exist.")
+
+    kfile_glob.remove(str(vmlinuz))
+    ifile_glob.remove(str(initrd_img))
+    sfile_glob.remove(str(system_map))
+    cfile_glob.remove(str(config))
+    return kfile_glob + ifile_glob + sfile_glob + cfile_glob
+
+
 def gen_metadata(
     target_dir,
     compressed_dir,
@@ -125,15 +179,22 @@ def gen_metadata(
     cmpr_ratio: float,
     filesize_threshold: int,
 ):
-    p = pathlib.Path(target_dir)
-    target_abs = pathlib.Path(os.path.abspath(target_dir))
+    p = Path(target_dir)
+    target_abs = Path(os.path.abspath(target_dir))
     ignore = ignore_rules(target_dir, ignore_file)
+
+    # remove kernels under /boot directory other than latest
+    non_latest_kernels = _list_non_latest_kernels(p / "boot")
+
     dirs = []
     symlinks = []
     regulars = []
     for f in p.glob("**/*"):
         try:
             if ignore.match(target_abs / str(f.relative_to(target_dir))):
+                continue
+            if str(f) in non_latest_kernels:
+                print(f"INFO: {f} is not a latest kernel. skip.")
                 continue
         except Exception as e:
             if str(e).startswith("Symlink loop from"):
@@ -151,26 +212,26 @@ def gen_metadata(
     # format:
     # mode,uid,gid,'dir/name'
     # ex: 0755,1000,1000,'path/to/dir'
-    with open(os.path.join(output_dir, directory_file), "w") as f:
+    with open(os.path.join(output_dir, directory_file), "w") as _f:
         dirs_list = [
             f"{_join_mode_uid_gid(target_dir, d)},{_encapsulate(d, prefix=prefix)}"
             for d in dirs
         ]
-        f.writelines("\n".join(dirs_list))
+        _f.writelines("\n".join(dirs_list))
 
     # symlinks.txt
     # format:
     # mode,uid,gid,'path/to/link','path/to/target'
     # ex: 0777,1000,1000,'path/to/link','path/to/target'
     # NOTE: mode is always 0777.
-    with open(os.path.join(output_dir, symlink_file), "w") as f:
+    with open(os.path.join(output_dir, symlink_file), "w") as _f:
         symlink_list = [
             f"{_join_mode_uid_gid(target_dir, d)},"
             f"{_encapsulate(d, prefix=prefix)},"
             f"{_encapsulate(os.readlink(os.path.join(target_dir, d)))}"
             for d in symlinks
         ]
-        f.writelines("\n".join(symlink_list))
+        _f.writelines("\n".join(symlink_list))
 
     # compression with zstd
     #   store the compressed file with its original file's hash and .zstd ext as name,
@@ -186,7 +247,9 @@ def gen_metadata(
     # mode,uid,gid,link number,sha256sum,'path/to/file',size,inode,[compress_alg]
     # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234,12345678,[zst]
     total_regular_size = 0
-    with open(os.path.join(output_dir, regular_file), "w") as f:
+
+    with open(os.path.join(output_dir, regular_file), "w") as _f:
+
         regular_list = []
         for d in regulars:
             size = os.path.getsize(os.path.join(target_dir, d))
@@ -221,10 +284,10 @@ def gen_metadata(
                 f"{compress_alg}"  # ensure the compress_alg is at the end
             )
             total_regular_size += size
-        f.writelines("\n".join(regular_list))
+        _f.writelines("\n".join(regular_list))
 
-    with open(os.path.join(output_dir, total_regular_size_file), "w") as f:
-        f.write(str(total_regular_size))
+    with open(os.path.join(output_dir, total_regular_size_file), "w") as _f:
+        _f.write(str(total_regular_size))
 
 
 if __name__ == "__main__":
