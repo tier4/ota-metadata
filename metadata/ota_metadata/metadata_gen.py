@@ -118,7 +118,7 @@ def ignore_rules(target_dir, ignore_file):
 
 
 def _get_latest_kernel_version(boot_dir: Path):
-    kfiles_path = str(boot_dir / "vmlinuz*")
+    kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
 
     pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
 
@@ -136,10 +136,10 @@ def _get_latest_kernel_version(boot_dir: Path):
 
 
 def _list_non_latest_kernels(boot_dir: Path):
-    kfiles_path = str(boot_dir / "vmlinuz*")
-    ifiles_path = str(boot_dir / "initrd.img*")
-    sfiles_path = str(boot_dir / "System.map*")
-    cfiles_path = str(boot_dir / "config*")
+    kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
+    ifiles_path = str(boot_dir / "initrd.img-*.*.*-*-*")
+    sfiles_path = str(boot_dir / "System.map-*.*.*-*-*")
+    cfiles_path = str(boot_dir / "config-*.*.*-*-*")
 
     kfile_glob = [f for f in glob.glob(kfiles_path) if not Path(f).is_symlink()]
     ifile_glob = [f for f in glob.glob(ifiles_path) if not Path(f).is_symlink()]
