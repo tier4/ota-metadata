@@ -122,9 +122,9 @@ def _get_latest_kernel_version(boot_dir: Path):
 
     pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
 
-    def compare(l, r):
-        ma_l = pa.match(Path(l).name)
-        ma_r = pa.match(Path(r).name)
+    def compare(left, right):
+        ma_l = pa.match(Path(left).name)
+        ma_r = pa.match(Path(right).name)
         ver_l = version.parse(ma_l["version"])
         ver_r = version.parse(ma_r["version"])
         return 1 if ver_l > ver_r else -1
