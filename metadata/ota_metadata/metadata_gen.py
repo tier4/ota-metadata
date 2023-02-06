@@ -165,8 +165,11 @@ def _list_non_latest_kernels(boot_dir: Path):
 
     kfile_glob.remove(str(vmlinuz))
     ifile_glob.remove(str(initrd_img))
-    sfile_glob.remove(str(system_map))
-    cfile_glob.remove(str(config))
+    try:
+        sfile_glob.remove(str(system_map))  # system_map is optional
+        cfile_glob.remove(str(config))  # config is optional
+    except ValueError:
+        pass
     return kfile_glob + ifile_glob + sfile_glob + cfile_glob
 
 
