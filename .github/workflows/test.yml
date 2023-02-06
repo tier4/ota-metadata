@@ -1,0 +1,66 @@
+name: test CI
+
+on: [pull_request]
+
+jobs:
+  pytest_with_coverage:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 3
+    strategy:
+      matrix:
+        python-version: [3.8]
+    steps:
+      - name: Checkout commit
+        uses: actions/checkout@v3
+      - name: Install test dependencies
+        run: |
+          python -m pip install -q --upgrade pip
+          python -m pip install -q -r metadata/ota_metadata/requirements.txt
+          python -m pip install -q -r metadata/ota_metadata/tests/requirements.txt
+      - name: Execute pytest with coverage trace under ota-test_base container
+        run: |
+          set -o pipefail
+          $pythonLocation/bin/python -m pytest --cov=metadata/ota_metadata metadata/ota_metadata/tests | tee pytest-coverage.txt
+      # export the coverage report to the comment!
+      - name: Add coverage report to PR comment
+        continue-on-error: true
+        uses: MishaKav/pytest-coverage-comment@v1.1.40
+        with:
+          pytest-coverage-path: ./pytest-coverage.txt
+          junitxml-path: ./pytest.xml
+
+  python_lint_check:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 3
+    strategy:
+      matrix:
+        python-version: [3.8]
+    steps:
+      - name: Checkout commit
+        uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install test dependencies
+        run: |
+          python -m pip install -q --upgrade pip
+          python -m pip install -q -r metadata/ota_metadata/tests/requirements.txt
+      - name: Lint codes without modification
+        run: |
+          $pythonLocation/bin/python -m black metadata/ota_metadata --check
+      - name: Lint codes for syntax check
+        run: |
+          $pythonLocation/bin/python -m flake8 metadata/ota_metadata
+
+  markdown_lint_check:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 3
+    steps:
+      - name: Checkout commit
+        uses: actions/checkout@v3
+      - name: markdownlint-cli
+        uses: nosborn/github-action-markdown-cli@v3.2.0
+        with:
+          files: .
+          config_file: .markdownlint.yaml

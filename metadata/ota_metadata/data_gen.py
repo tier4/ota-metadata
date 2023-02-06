@@ -102,8 +102,8 @@ class RegularInf(_BaseInf):
 def _gen_dirs(dst_dir, directory_file, progress):
     with open(directory_file) as f:
         lines = f.read().splitlines()
-        for l in tqdm(lines) if progress else lines:
-            inf = DirectoryInf(l)
+        for line in tqdm(lines) if progress else lines:
+            inf = DirectoryInf(line)
             target_path = f"{dst_dir}{inf.path}"
             os.makedirs(target_path, mode=inf.mode)
             os.chown(target_path, inf.uid, inf.gid)
@@ -113,8 +113,8 @@ def _gen_dirs(dst_dir, directory_file, progress):
 def _gen_symlinks(dst_dir, symlink_file, progress):
     with open(symlink_file) as f:
         lines = f.read().splitlines()
-        for l in tqdm(lines) if progress else lines:
-            inf = SymbolicLinkInf(l)
+        for line in tqdm(lines) if progress else lines:
+            inf = SymbolicLinkInf(line)
             target_path = f"{dst_dir}{inf.slink}"
             os.symlink(inf.srcpath, target_path)
             os.chown(target_path, inf.uid, inf.gid, follow_symlinks=False)
@@ -125,8 +125,8 @@ def _gen_regulars(dst_dir, regular_file, src_dir, progress):
     with open(regular_file) as f:
         lines = f.read().splitlines()
         links_dict = {}
-        for l in tqdm(lines) if progress else lines:
-            inf = RegularInf(l)
+        for line in tqdm(lines) if progress else lines:
+            inf = RegularInf(line)
             links_key = inf.inode if inf.inode is not None else inf.sha256hash
             dst = f"{dst_dir}{inf.path}"
             if links_key not in links_dict:
