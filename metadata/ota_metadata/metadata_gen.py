@@ -136,6 +136,11 @@ def _get_latest_kernel_version(boot_dir: Path):
 
 
 def _list_non_latest_kernels(boot_dir: Path):
+    # if boot/extlinux/extlinux.conf exists, the kernel is specified in that file
+    # so we don't need to pickup the latest kernel.
+    if (boot_dir / "extlinux" / "extlinux.conf").is_file():
+        return []
+
     kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
     ifiles_path = str(boot_dir / "initrd.img-*.*.*-*-*")
     sfiles_path = str(boot_dir / "System.map-*.*.*-*-*")
