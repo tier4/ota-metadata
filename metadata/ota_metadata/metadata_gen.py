@@ -191,15 +191,63 @@ def gen_metadata(
     target_abs = Path(os.path.abspath(target_dir))
     ignore = ignore_rules(target_dir, ignore_file)
 
+    # If ignore file has the folders directories set:
+    #    1, "home/autoware/*/build"
+    #    2, "home/autoware/*/src"
+    # We will NOT simply ignore files under this folders.
+    # We will check the following:
+    #    1, If the file is set as the target of a symblink ?
+    #    2, If the file falls in some special folder pattern ?
+    # Why we need to do this? This is explained in this document
+    # https://tier4.atlassian.net/wiki/x/JoC21Q
+    check_patterns = [r"home/autoware/[^/]+/build", r"home/autoware/[^/]+/src"]
+
+    # This is the flag to control if we will check and add files back to "build" and "src" folder
+    check_symlink = any(
+        bool(re.search(pattern, str(rule)))
+        for rule in ignore.rules
+        for pattern in check_patterns
+    )
+
+    # Special Pattern that we need to check add add files.
+    build_folder_patterns = [
+        r"home/autoware/[^/]*/build/.*/hook/.*",
+        r"home/autoware/[^/]*/build/.*/.*.egg-info/.*",
+    ]
+
+    additional_symlink_set = set()
+    additional_regular_set = set()
+    additional_dir_set = set()
+
     # remove kernels under /boot directory other than latest
     non_latest_kernels = _list_non_latest_kernels(p / "boot")
-
     dirs = []
     symlinks = []
     regulars = []
     for f in p.glob("**/*"):
         try:
             if ignore.match(target_abs / str(f.relative_to(target_dir))):
+                if check_symlink is True:
+                    if any(
+                        bool(re.search(pattern, str(f.relative_to(target_dir))))
+                        for pattern in check_patterns
+                    ):
+                        if f.is_dir() and not f.is_symlink():
+                            additional_dir_set.add(str(f.relative_to(target_dir)))
+                        if f.is_symlink():
+                            additional_symlink_set.add(str(f.relative_to(target_dir)))
+                        if f.is_file() and not f.is_symlink():
+                            if any(
+                                bool(
+                                    re.search(
+                                        file_pattern, str(f.relative_to(target_dir))
+                                    )
+                                )
+                                for file_pattern in build_folder_patterns
+                            ):
+                                additional_regular_set.add(
+                                    str(f.relative_to(target_dir))
+                                )
                 continue
             if str(f) in non_latest_kernels:
                 print(f"INFO: {f} is not a latest kernel. skip.")
@@ -216,6 +264,77 @@ def gen_metadata(
         if f.is_file() and not f.is_symlink():
             regulars.append(str(f.relative_to(target_dir)))
 
+    # symlinks.txt
+    # format:
+    # mode,uid,gid,'path/to/link','path/to/target'
+    # ex: 0777,1000,1000,'path/to/link','path/to/target'
+    # NOTE: mode is always 0777.
+    symlink_list = []
+
+    if check_symlink:
+        symlinks.extend(additional_symlink_set)
+
+    for d in symlinks:
+
+        symlink_target_path = os.readlink(os.path.join(target_dir, d))
+        symlink_entry = (
+            f"{_join_mode_uid_gid(target_dir, d)},"
+            f"{_encapsulate(d, prefix=prefix)},"
+            f"{_encapsulate(symlink_target_path)}"
+        )
+        symlink_list.append(symlink_entry)
+
+        # Do nothing if ignore file does not have the following paths defined
+        # "home/autoware/*build" or "home/autoware/*/src" definition
+        if check_symlink is False:
+            continue
+
+        # Add the targeted file back to "regulars[]" and "dir[]"
+        # if they are under "home/autoware...../build" or "home/autoware...../src"
+
+        # when the target link is defined as "/link1/link2/link3"
+        if symlink_target_path.startswith("/"):
+            target_path_abs = os.path.normpath(str(target_abs) + symlink_target_path)
+            symlink_target_path = symlink_target_path[1:]
+        # when the target link is defined as "link1/link2/link3" or "../link4" or "../../link5"
+        else:
+            # start to get symlink file's absolute path
+            current_path = os.path.dirname((os.path.join(target_abs, d)))
+            target_path_abs = os.path.normpath(
+                os.path.join(current_path, symlink_target_path)
+            )
+            # reformat the symlink target link to "/link1/link2/link3"
+            symlink_target_path = os.path.relpath(target_path_abs, target_dir)
+
+        # In case the target link matches the ignore patten, we need to check and add it back to regulars[] and dirs[]
+        # Also, we need to the path level one by one.
+        # In case the target link is a symlink, we will ignore it.
+        if ignore.match(Path(target_path_abs)):
+            path_names = symlink_target_path.split(os.sep)
+            path_to_check = target_dir
+            for path_name in path_names:
+                if path_name:
+                    path_to_check = os.path.join(path_to_check, path_name)
+                    if os.path.islink(path_to_check):
+                        break
+                    elif os.path.isdir(path_to_check):
+                        additional_dir_set.add(
+                            os.path.relpath(path_to_check, target_dir)
+                        )
+                    elif os.path.isfile(path_to_check):
+                        additional_regular_set.add(
+                            os.path.relpath(path_to_check, target_dir)
+                        )
+
+    with open(os.path.join(output_dir, symlink_file), "w") as _f:
+        _f.writelines("\n".join(symlink_list))
+
+    if check_symlink:
+        dirs.extend(additional_dir_set)
+        regulars.extend(additional_regular_set)
+        dirs = list(set(dirs))
+        regulars = list(set(regulars))
+
     # dirs.txt
     # format:
     # mode,uid,gid,'dir/name'
@@ -226,20 +345,6 @@ def gen_metadata(
             for d in dirs
         ]
         _f.writelines("\n".join(dirs_list))
-
-    # symlinks.txt
-    # format:
-    # mode,uid,gid,'path/to/link','path/to/target'
-    # ex: 0777,1000,1000,'path/to/link','path/to/target'
-    # NOTE: mode is always 0777.
-    with open(os.path.join(output_dir, symlink_file), "w") as _f:
-        symlink_list = [
-            f"{_join_mode_uid_gid(target_dir, d)},"
-            f"{_encapsulate(d, prefix=prefix)},"
-            f"{_encapsulate(os.readlink(os.path.join(target_dir, d)))}"
-            for d in symlinks
-        ]
-        _f.writelines("\n".join(symlink_list))
 
     # compression with zstd
     #   store the compressed file with its original file's hash and .zstd ext as name,
