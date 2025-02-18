@@ -1,0 +1,1 @@
+0777,1000,1000,'/home/autoware/autoware.proj/install/dummy_symlink_002.py','../src/dummy_src_003.py'

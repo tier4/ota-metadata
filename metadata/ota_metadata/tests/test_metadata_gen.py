@@ -76,3 +76,32 @@ def test_list_non_latest_kernels_empty(tmp_path):
 
     non_latests = metadata_gen._list_non_latest_kernels(tmp_path)
     assert non_latests == []
+
+def test_gen_metadata_method(tmp_path):
+    import metadata_gen
+    import shutil
+    import os
+
+    test_folder=str("./dummy_folder")
+    data_folder=str(test_folder + "/data")
+    compress_folder=str(test_folder + "/data.zst")
+    output_folder=str(test_folder+"/output")
+    dummy_ignore_file=str(test_folder + "/ignore.txt")
+
+    if os.path.exists(output_folder):
+        shutil.rmtree(output_folder)
+    os.makedirs(output_folder)
+
+    metadata_gen.gen_metadata(
+        target_dir= data_folder,
+        compressed_dir=compress_folder,
+        prefix='/',
+        output_dir=output_folder,
+        directory_file=str("dirs.txt"),
+        symlink_file=str("symlink.txt"),
+        regular_file=str("regulars.txt"),
+        total_regular_size_file=str("total_regular_size_.txt"),
+        ignore_file=str(dummy_ignore_file),
+        cmpr_ratio=1.25,
+        filesize_threshold=16 * 1024,
+    )

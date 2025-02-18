@@ -193,7 +193,6 @@ def gen_metadata(
 
     # remove kernels under /boot directory other than latest
     non_latest_kernels = _list_non_latest_kernels(p / "boot")
-
     dirs = []
     symlinks = []
     regulars = []
@@ -216,6 +215,40 @@ def gen_metadata(
         if f.is_file() and not f.is_symlink():
             regulars.append(str(f.relative_to(target_dir)))
 
+    # symlinks.txt
+    # format:
+    # mode,uid,gid,'path/to/link','path/to/target'
+    # ex: 0777,1000,1000,'path/to/link','path/to/target'
+    # NOTE: mode is always 0777.
+    symlink_list = []
+    target_file_set = set()
+    target_dir_set = set()
+
+    for d in symlinks:
+        symlink_entry = (
+            f"{_join_mode_uid_gid(target_dir, d)},"
+            f"{_encapsulate(d, prefix=prefix)},"
+            f"{_encapsulate(os.readlink(os.path.join(target_dir, d)))}"
+        )
+        symlink_list.append(symlink_entry)
+
+        target_path_real = os.path.realpath(os.path.join(target_dir, d))
+        # check if a symlink is targeting to a file that has been set to "ignore"
+        # if so, add the target file and target dir back to the list
+        if ignore.match(Path(target_path_real)):
+            try:
+                target_path_rel = os.path.relpath(target_path_real, target_dir)
+                target_file_set.add(target_path_rel)
+                target_dir_set.add(os.path.dirname(target_path_rel))
+            except ValueError as error:
+                print(f"WARN: {error}") 
+                
+        regulars.extend(target_file_set)
+        dirs.extend(target_dir_set)
+
+    with open(os.path.join(output_dir, symlink_file), "w") as _f:
+        _f.writelines("\n".join(symlink_list))
+
     # dirs.txt
     # format:
     # mode,uid,gid,'dir/name'
@@ -226,20 +259,6 @@ def gen_metadata(
             for d in dirs
         ]
         _f.writelines("\n".join(dirs_list))
-
-    # symlinks.txt
-    # format:
-    # mode,uid,gid,'path/to/link','path/to/target'
-    # ex: 0777,1000,1000,'path/to/link','path/to/target'
-    # NOTE: mode is always 0777.
-    with open(os.path.join(output_dir, symlink_file), "w") as _f:
-        symlink_list = [
-            f"{_join_mode_uid_gid(target_dir, d)},"
-            f"{_encapsulate(d, prefix=prefix)},"
-            f"{_encapsulate(os.readlink(os.path.join(target_dir, d)))}"
-            for d in symlinks
-        ]
-        _f.writelines("\n".join(symlink_list))
 
     # compression with zstd
     #   store the compressed file with its original file's hash and .zstd ext as name,
