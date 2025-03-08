@@ -191,14 +191,14 @@ def gen_metadata(
     target_abs = Path(os.path.abspath(target_dir))
     ignore = ignore_rules(target_dir, ignore_file)
 
-    # If ignore file has the folders directories set:
+    # If ignore file has the following directories:
     #    1, "home/autoware/*/build"
     #    2, "home/autoware/*/src"
-    # We will NOT simply ignore files under this folders.
+    # We will NOT simply ignore files under them.
     # We will check the following:
     #    1, If the file is set as the target of a symblink ?
     #    2, If the file falls in some special folder pattern ?
-    # Why we need to do this? This is explained in this document
+    # Why we need to do this? It is explained in this document
     # https://tier4.atlassian.net/wiki/x/JoC21Q
     check_patterns = [r"home/autoware/[^/]+/build", r"home/autoware/[^/]+/src"]
 
@@ -209,7 +209,7 @@ def gen_metadata(
         for pattern in check_patterns
     )
 
-    # Special Pattern that we need to check add add files.
+    # Special Patterns that we need to check and add files.
     build_folder_patterns = [
         r"home/autoware/[^/]*/build/.*/hook/.*",
         r"home/autoware/[^/]*/build/.*/.*.egg-info/.*",
@@ -289,8 +289,8 @@ def gen_metadata(
         if check_symlink is False:
             continue
 
-        # Add the targeted file back to "regulars[]" and "dir[]"
-        # if they are under "home/autoware...../build" or "home/autoware...../src"
+        # Check the symlink target file
+        # if they are under "home/autoware/*/build" or "home/autoware/*/src"
 
         # when the target link is defined as "/link1/link2/link3"
         if symlink_target_path.startswith("/"):
@@ -306,7 +306,8 @@ def gen_metadata(
             # reformat the symlink target link to "/link1/link2/link3"
             symlink_target_path = os.path.relpath(target_path_abs, target_dir)
 
-        # In case the target link matches the ignore patten, we need to check and add it back to regulars[] and dirs[]
+        # In case the target link matches the ignore patten, 
+        # we need to check and add it back to regulars[] and dirs[]
         # Also, we need to the path level one by one.
         # In case the target link is a symlink, we will ignore it.
         if ignore.match(Path(target_path_abs)):
@@ -329,6 +330,9 @@ def gen_metadata(
     with open(os.path.join(output_dir, symlink_file), "w") as _f:
         _f.writelines("\n".join(symlink_list))
 
+    # Add additional files and directories here.
+    # Important to check check_symlink. 
+    # Make sure not affect the current behavior.
     if check_symlink:
         dirs.extend(additional_dir_set)
         regulars.extend(additional_regular_set)
