@@ -306,7 +306,7 @@ def gen_metadata(
             # reformat the symlink target link to "/link1/link2/link3"
             symlink_target_path = os.path.relpath(target_path_abs, target_dir)
 
-        # In case the target link matches the ignore patten, 
+        # In case the target link matches the ignore patten,
         # we need to check and add it back to regulars[] and dirs[]
         # Also, we need to the path level one by one.
         # In case the target link is a symlink, we will ignore it.
@@ -331,7 +331,7 @@ def gen_metadata(
         _f.writelines("\n".join(symlink_list))
 
     # Add additional files and directories here.
-    # Important to check check_symlink. 
+    # Important to check check_symlink.
     # Make sure not affect the current behavior.
     if check_symlink:
         dirs.extend(additional_dir_set)
