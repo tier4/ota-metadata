@@ -200,19 +200,19 @@ def gen_metadata(
     #    2, If the file falls in some special folder pattern ?
     # Why we need to do this? It is explained in this document
     # https://tier4.atlassian.net/wiki/x/JoC21Q
-    check_patterns = [r"home/autoware/[^/]+/build", r"home/autoware/[^/]+/src"]
+    check_patterns = [re.compile(r"home/autoware/[^/]+/build"), re.compile(r"home/autoware/[^/]+/src")]
 
     # This is the flag to control if we will check and add files back to "build" and "src" folder
     check_symlink = any(
-        bool(re.search(pattern, str(rule)))
-        for rule in ignore.rules
-        for pattern in check_patterns
+        _pattern.search(str(_rule))
+        for _rule in ignore.rules
+        for _pattern in check_patterns
     )
 
     # Special Patterns that we need to check and add files.
     build_folder_patterns = [
-        r"home/autoware/[^/]*/build/.*/hook/.*",
-        r"home/autoware/[^/]*/build/.*/.*.egg-info/.*",
+        re.compile(r"home/autoware/[^/]*/build/.*/hook/.*"),
+        re.compile(r"home/autoware/[^/]*/build/.*/.*.egg-info/.*"),
     ]
 
     additional_symlink_set = set()
@@ -232,16 +232,15 @@ def gen_metadata(
                     if any(
                         re.search(pattern, relative_path) for pattern in check_patterns
                     ):
-                        if f.is_dir() and not f.is_symlink():
-                            additional_dir_set.add(relative_path)
-                        elif f.is_symlink():
+                        if f.is_symlink():
                             additional_symlink_set.add(relative_path)
-                        elif f.is_file() and not f.is_symlink():
-                            if any(
-                                re.search(file_pattern, relative_path)
-                                for file_pattern in build_folder_patterns
-                            ):
-                                additional_regular_set.add(relative_path)
+                        elif f.is_dir():
+                            additional_dir_set.add(relative_path)
+                        elif f.is_file() and any(
+                            _file_pattern.search(relative_path)
+                            for _file_pattern in build_folder_patterns
+                        ):
+                            additional_regular_set.add(relative_path)
                 continue
             if str(f) in non_latest_kernels:
                 print(f"INFO: {f} is not a latest kernel. skip.")
@@ -303,7 +302,6 @@ def gen_metadata(
         # In case the target link matches the ignore patten,
         # we need to check and add it back to regulars[] and dirs[]
         # Also, we need to the path level one by one.
-        # In case the target link is a symlink, we will ignore it.
         if ignore.match(Path(target_path_abs)):
             path_names = symlink_target_path.split(os.sep)
             path_to_check = target_dir
@@ -311,6 +309,9 @@ def gen_metadata(
                 if path_name:
                     path_to_check = os.path.join(path_to_check, path_name)
                     if os.path.islink(path_to_check):
+                        additional_symlink_set.add(path_to_check)
+                        # if the target path is a symlink again, 
+                        # we finish checking here.
                         break
                     elif os.path.isdir(path_to_check):
                         additional_dir_set.add(
@@ -330,8 +331,11 @@ def gen_metadata(
     if check_symlink:
         dirs.extend(additional_dir_set)
         regulars.extend(additional_regular_set)
+        symlink_list.extend(additional_symlink_set)
+        # remove potential duplicate here:
         dirs = list(set(dirs))
         regulars = list(set(regulars))
+        symlink_list = list(set(symlink_list))
 
     # dirs.txt
     # format:
