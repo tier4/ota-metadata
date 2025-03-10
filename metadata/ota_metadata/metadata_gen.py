@@ -200,7 +200,10 @@ def gen_metadata(
     #    2, If the file falls in some special folder pattern ?
     # Why we need to do this? It is explained in this document
     # https://tier4.atlassian.net/wiki/x/JoC21Q
-    check_patterns = [re.compile(r"home/autoware/[^/]+/build"), re.compile(r"home/autoware/[^/]+/src")]
+    check_patterns = [
+        re.compile(r"home/autoware/[^/]+/build"),
+        re.compile(r"home/autoware/[^/]+/src"),
+    ]
 
     # This is the flag to control if we will check and add files back to "build" and "src" folder
     check_symlink = any(
@@ -310,7 +313,7 @@ def gen_metadata(
                     path_to_check = os.path.join(path_to_check, path_name)
                     if os.path.islink(path_to_check):
                         additional_symlink_set.add(path_to_check)
-                        # if the target path is a symlink again, 
+                        # if the target path is a symlink again,
                         # we finish checking here.
                         break
                     elif os.path.isdir(path_to_check):
