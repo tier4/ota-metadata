@@ -228,26 +228,20 @@ def gen_metadata(
         try:
             if ignore.match(target_abs / str(f.relative_to(target_dir))):
                 if check_symlink:
+                    relative_path = str(f.relative_to(target_dir))
                     if any(
-                        bool(re.search(pattern, str(f.relative_to(target_dir))))
-                        for pattern in check_patterns
+                        re.search(pattern, relative_path) for pattern in check_patterns
                     ):
                         if f.is_dir() and not f.is_symlink():
-                            additional_dir_set.add(str(f.relative_to(target_dir)))
+                            additional_dir_set.add(relative_path)
                         elif f.is_symlink():
-                            additional_symlink_set.add(str(f.relative_to(target_dir)))
+                            additional_symlink_set.add(relative_path)
                         elif f.is_file() and not f.is_symlink():
                             if any(
-                                bool(
-                                    re.search(
-                                        file_pattern, str(f.relative_to(target_dir))
-                                    )
-                                )
+                                re.search(file_pattern, relative_path)
                                 for file_pattern in build_folder_patterns
                             ):
-                                additional_regular_set.add(
-                                    str(f.relative_to(target_dir))
-                                )
+                                additional_regular_set.add(relative_path)
                 continue
             if str(f) in non_latest_kernels:
                 print(f"INFO: {f} is not a latest kernel. skip.")
