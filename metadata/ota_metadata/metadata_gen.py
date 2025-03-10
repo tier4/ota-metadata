@@ -227,16 +227,16 @@ def gen_metadata(
     for f in p.glob("**/*"):
         try:
             if ignore.match(target_abs / str(f.relative_to(target_dir))):
-                if check_symlink is True:
+                if check_symlink:
                     if any(
                         bool(re.search(pattern, str(f.relative_to(target_dir))))
                         for pattern in check_patterns
                     ):
                         if f.is_dir() and not f.is_symlink():
                             additional_dir_set.add(str(f.relative_to(target_dir)))
-                        if f.is_symlink():
+                        elif f.is_symlink():
                             additional_symlink_set.add(str(f.relative_to(target_dir)))
-                        if f.is_file() and not f.is_symlink():
+                        elif f.is_file() and not f.is_symlink():
                             if any(
                                 bool(
                                     re.search(
