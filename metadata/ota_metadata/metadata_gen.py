@@ -232,9 +232,7 @@ def gen_metadata(
             if ignore.match(target_abs / str(f.relative_to(target_dir))):
                 if check_symlink:
                     relative_path = str(f.relative_to(target_dir))
-                    if any(
-                        re.search(pattern, relative_path) for pattern in check_patterns
-                    ):
+                    if any(pattern.search(relative_path) for pattern in check_patterns):
                         if f.is_symlink():
                             additional_symlink_set.add(relative_path)
                         elif f.is_dir():
