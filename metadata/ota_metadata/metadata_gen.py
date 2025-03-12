@@ -332,11 +332,15 @@ def gen_metadata(
     if check_symlink:
         dirs.extend(additional_dir_set)
         regulars.extend(additional_regular_set)
-        symlink_list.extend(additional_symlink_set)
+        symlinks.extend(additional_symlink_set)
         # remove potential duplicate here:
-        dirs = list(set(dirs))
         regulars = list(set(regulars))
-        symlink_list = list(set(symlink_list))
+        symlinks = list(set(symlinks))
+        # We sort dirs list only here. Because directories will be created recursively later.
+        # "data_gen.py" will through an error if a directory already exist
+        # sort() might effect performance, so we do it for dirs only.
+        dirs = sorted(set(dirs))
+        
 
     # dirs.txt
     # format:
