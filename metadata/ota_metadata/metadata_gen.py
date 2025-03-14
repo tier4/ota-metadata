@@ -310,9 +310,10 @@ def gen_metadata(
                 if path_name:
                     path_to_check = os.path.join(path_to_check, path_name)
                     if os.path.islink(path_to_check):
-                        additional_symlink_set.add(path_to_check)
                         # if the target path is a symlink again,
                         # we finish checking here.
+                        # we don't need to add the symlink to symlinks[] list.
+                        # it should already been added and we don't need to process symlinks[] recursively
                         break
                     elif os.path.isdir(path_to_check):
                         additional_dir_set.add(
@@ -332,11 +333,12 @@ def gen_metadata(
     if check_symlink:
         dirs.extend(additional_dir_set)
         regulars.extend(additional_regular_set)
-        symlink_list.extend(additional_symlink_set)
         # remove potential duplicate here:
-        dirs = list(set(dirs))
         regulars = list(set(regulars))
-        symlink_list = list(set(symlink_list))
+        # We sort dirs list only here. Because directories will be created later.
+        # "data_gen.py" will throw an error if a directory already exist.
+        # sort() might effect performance, so we do it for dirs only.
+        dirs = sorted(set(dirs))
 
     # dirs.txt
     # format:
