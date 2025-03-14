@@ -335,8 +335,8 @@ def gen_metadata(
         regulars.extend(additional_regular_set)
         # remove potential duplicate here:
         regulars = list(set(regulars))
-        # We sort dirs list only here. Because directories will be created recursively later.
-        # "data_gen.py" will through an error if a directory already exist
+        # We sort dirs list only here. Because directories will be created later.
+        # "data_gen.py" will throw an error if a directory already exist.
         # sort() might effect performance, so we do it for dirs only.
         dirs = sorted(set(dirs))
 
