@@ -1,5 +1,5 @@
 git+https://github.com/tier4/igittigitt.git#egg=igittigitt
-cryptography==36.0.0
+cryptography==39.0.1
 tqdm==4.62.2
 zstandard==0.18.0
 packaging==21.3
