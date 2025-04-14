@@ -216,6 +216,7 @@ def gen_metadata(
     build_folder_patterns = [
         re.compile(r"home/autoware/[^/]*/build/.*/hook/.*"),
         re.compile(r"home/autoware/[^/]*/build/.*/.*.egg-info/.*"),
+        re.compile(r"home/autoware/[^/]*/build/.*/.*.so$"),
     ]
 
     additional_symlink_set = set()
