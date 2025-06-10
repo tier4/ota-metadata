@@ -19,6 +19,8 @@ import os
 import re
 import glob
 import argparse
+import shutil
+
 import zstandard
 import igittigitt
 from hashlib import sha256
@@ -117,6 +119,42 @@ def ignore_rules(target_dir, ignore_file):
     return parser
 
 
+def _delete_file(path: str) -> bool:
+    """
+    Delete a file at the given path.
+    Returns True if the file was deleted, False if exception occurred.
+    """
+    try:
+        file_path = Path(path)
+        file_path.unlink(missing_ok=True)
+        print(f"Deleted file: {path}")
+        return True
+    except Exception as e:
+        print(f"Error deleting file {path}: {e}")
+        return False
+
+
+def _delete_folder(path: str) -> bool:
+    """
+    Delete a folder at the given path.
+    Returns True if the folder was deleted, False if exception occurred.
+    """
+    try:
+        folder_path = Path(path)
+        shutil.rmtree(folder_path, ignore_errors=True)
+        print(f"Deleted folder: {path}")
+        return True
+    except FileNotFoundError:
+        print(f"Error: Directory {path} not found.")
+        return False
+    except PermissionError:
+        print(f"Error: Permission denied to delete {path}.")
+        return False
+    except Exception as e:
+        print(f"Error deleting folder {path}: {e}")
+        return False
+
+
 def _get_latest_kernel_version(boot_dir: Path):
     kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
 
@@ -196,9 +234,9 @@ def gen_metadata(
     #    2, "home/autoware/*/src"
     # We will NOT simply ignore files under them.
     # We will check the following:
-    #    1, If the file is set as the target of a symblink ?
-    #    2, If the file falls in some special folder pattern ?
-    # Why we need to do this? It is explained in this document
+    #    1, If the file is set as the target of a symlink?
+    #    2, If the file falls in some special folder pattern?
+    # Why do we need to do this? It is explained in this document
     # https://tier4.atlassian.net/wiki/x/JoC21Q
     check_patterns = [
         re.compile(r"home/autoware/[^/]+/build"),
