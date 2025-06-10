@@ -282,14 +282,19 @@ def gen_metadata(
 
     # Identify non-latest kernels (absolute paths)
     non_latest_kernels_abs = _list_non_latest_kernels(p / "boot")
+    # --- DEBUG PRINT ---
+    print(f"\n--- DEBUG: Non-latest kernels identified by _list_non_latest_kernels: {non_latest_kernels_abs} ---")
+    # --- END DEBUG PRINT ---
 
-    # First Pass: Categorize and identify deletion candidates
+    # First Pass: Categorize and identify initial deletion candidates
     # We iterate all paths and decide if they should be in metadata or deleted.
     for f_abs in p.glob("**/*"):
         try:
-            # Skip symlink loops
-            if f_abs.is_symlink() and not f_abs.exists():  # broken symlink
-                print(f"WARN: Broken symlink detected: {f_abs}. Skipping.")
+            # Skip symlink loops and broken symlinks
+            if f_abs.is_symlink() and not f_abs.exists():
+                print(f"WARN: Broken symlink detected: {f_abs}. Skipping collection for metadata.")
+                # We still keep track of it as an existing path if it's not removed by ignore rules
+                # This ensures it's not marked for deletion if it's the only thing in its parent dir.
                 continue
 
             f_rel = f_abs.relative_to(target_dir)
@@ -298,41 +303,54 @@ def gen_metadata(
             is_symlink = f_abs.is_symlink()
             is_non_latest_kernel = f_abs in non_latest_kernels_abs
 
-            # Symlinks are never deleted. They are always added to metadata for reconstruction.
+            # --- DEBUG PRINTS START ---
+            if f_abs.parent.name == "boot":  # Only print for files in the boot directory to keep output concise
+                print(f"\n--- Processing: {f_abs.name} ---")
+                print(f"  Is non-latest kernel (from _list_non_latest_kernels): {is_non_latest_kernel}")
+                print(f"  Is symlink: {is_symlink}")
+                print(f"  Is ignored: {is_ignored}")
+            # --- DEBUG PRINTS END ---
+
+            # Symlinks themselves are never deleted. They are always added to metadata for reconstruction.
             if is_symlink:
                 metadata_symlinks.add(f_rel)
-                continue  # Skip to next file, symlinks are handled
+                # --- DEBUG PRINT ---
+                if f_abs.parent.name == "boot":
+                    print(f"  SKIPPED FOR DELETION (is symlink): {f_abs.name}")
+                # --- END DEBUG PRINT ---
+                continue  # Skip to next file, symlinks are handled in terms of deletion
 
             # --- Decision Logic for Files/Directories (non-symlinks) ---
             should_be_deleted = False
 
+            # Non-latest kernels (non-symlinks) are always marked for deletion
             if is_non_latest_kernel:
-                # Non-latest kernels (non-symlinks) are always marked for deletion
                 should_be_deleted = True
             elif is_ignored:
                 # If ignored, check if it's a special case that should be kept despite ignore rules
                 should_be_kept_despite_ignore = False
                 if check_symlink_special_case:
-                    # Check if the path itself is one of the special 'autoware/build' or 'autoware/src' paths
+                    # Check if the path itself or its components are special 'autoware/build' or 'autoware/src' patterns
                     is_in_special_autoware_pattern = any(pattern.search(str(f_rel)) for pattern in check_patterns)
 
                     if is_in_special_autoware_pattern:
                         if f_abs.is_dir():
-                            # Keep directories in special autoware patterns (e.g., home/autoware/*/build itself)
                             should_be_kept_despite_ignore = True
                         elif f_abs.is_file():
-                            # Keep specific file types within special autoware build patterns
                             is_special_build_file_type = any(
                                 _file_pattern.search(str(f_rel)) for _file_pattern in build_folder_patterns)
                             if is_special_build_file_type:
                                 should_be_kept_despite_ignore = True
 
                 if not should_be_kept_despite_ignore:
-                    # If ignored and not a special case to keep, then mark for deletion
                     should_be_deleted = True
 
             if should_be_deleted:
                 paths_to_delete_abs.add(f_abs)
+                # --- DEBUG PRINT ---
+                if f_abs.parent.name == "boot":
+                    print(f"  MARKED FOR DELETION: {f_abs.name}")
+                # --- END DEBUG PRINT ---
             else:
                 # If not marked for deletion, add to metadata lists
                 if f_abs.is_dir():
@@ -347,11 +365,11 @@ def gen_metadata(
                 print(f"Error processing path {f_abs}: {e}. Skipping.")
                 continue  # Skip this file and continue with others
 
-    # Second Pass: Process symlink targets for inclusion in metadata
-    # This ensures that files/dirs that are targets of symlinks are included
-    # in metadata even if they were initially ignored.
-    symlink_targets_for_metadata: Set[Path] = set()
-    for symlink_rel_path in metadata_symlinks:  # Iterate through symlinks we've decided to keep
+    # Second Pass: Process symlink targets for universal protection from deletion and metadata inclusion
+    # This ensures that any file/directory that is the target of a symlink (and exists)
+    # is NOT deleted, and its metadata is collected.
+    symlink_targets_for_metadata_and_protection: Set[Path] = set()
+    for symlink_rel_path in metadata_symlinks:  # Iterate through symlinks we've decided to keep in metadata
         try:
             symlink_abs_path = p / symlink_rel_path
             symlink_target_raw = os.readlink(str(symlink_abs_path))  # target as string
@@ -362,45 +380,42 @@ def gen_metadata(
             else:
                 target_abs_path = (symlink_abs_path.parent / symlink_target_raw).resolve()
 
-            # Only process if the target is actually within the target_dir
-            if target_abs_path.is_relative_to(target_abs):
+            # Only process if the target exists and is within the target_dir
+            if target_abs_path.exists() and target_abs_path.is_relative_to(target_abs):
                 target_rel_path = target_abs_path.relative_to(target_dir)
 
-                # If this target (which is within target_dir) was previously marked for deletion
-                # or was ignored, we now re-include it because a symlink points to it.
-                if target_abs_path in paths_to_delete_abs:
-                    # Remove it from deletion candidates
-                    paths_to_delete_abs.discard(target_abs_path)
+                # Add the target and all its parent directories (up to target_dir) to be included in metadata
+                # and remove them from deletion candidates if they were previously marked for deletion.
+                parts = target_rel_path.parts
+                current_partial_path = Path()
+                for part in parts:
+                    if part:
+                        current_partial_path /= part
+                        abs_current_partial_path = p / current_partial_path
+                        if abs_current_partial_path.is_symlink():
+                            # If a symlink is encountered in the path to target, stop adding parents
+                            break
 
-                # Add the target and its parent directories (up to the ignored root) to metadata
-                # if it falls under special check patterns.
-                if check_symlink_special_case and ignore.match(target_abs_path):
-                    parts = target_rel_path.parts
-                    current_partial_path = Path()
-                    for part in parts:
-                        if part:
-                            current_partial_path /= part
-                            full_checked_path_abs = target_dir / current_partial_path
+                        # Add to metadata set (unconditionally, as it's part of a kept path)
+                        symlink_targets_for_metadata_and_protection.add(current_partial_path)
 
-                            if full_checked_path_abs.is_symlink():
-                                # Stop if a symlink is encountered in the path to target
-                                break
-                            if any(pattern.search(str(current_partial_path)) for pattern in check_patterns):
-                                symlink_targets_for_metadata.add(current_partial_path)
-                                # If it was a file/dir, ensure it's not in deletion candidates
-                                if full_checked_path_abs in paths_to_delete_abs:
-                                    paths_to_delete_abs.discard(full_checked_path_abs)
+                        # And, if this path (file or dir) was marked for deletion, remove it.
+                        if abs_current_partial_path in paths_to_delete_abs:
+                            paths_to_delete_abs.discard(abs_current_partial_path)
             else:
+                # Print info for symlinks pointing outside target_dir or to non-existent targets
                 print(
-                    f"INFO: Symlink {symlink_rel_path} targets outside {target_dir}: {symlink_target_raw}. Not including target in metadata.")
+                    f"INFO: Symlink {symlink_rel_path} targets outside {target_dir} or to non-existent target: {symlink_target_raw}. Not including target in metadata.")
 
         except OSError as e:  # Handle broken symlinks or permission issues during readlink
-            print(f"WARN: Failed to read symlink {symlink_rel_path}: {e}. Skipping target processing.")
+            # This case is now mostly handled by the initial `f_abs.is_symlink() and not f_abs.exists()` check.
+            # But this is here for safety if readlink still fails for other reasons.
+            print(f"WARN: Failed to read symlink target for {symlink_rel_path}: {e}. Skipping target processing.")
         except Exception as e:
             print(f"Error processing symlink target for {symlink_rel_path}: {e}. Skipping.")
 
-    # Incorporate the symlink targets into our main metadata lists
-    for p_rel in symlink_targets_for_metadata:
+    # Incorporate the symlink targets and their parent dirs into our main metadata lists
+    for p_rel in symlink_targets_for_metadata_and_protection:
         p_abs = p / p_rel
         if p_abs.is_dir():
             metadata_dirs.add(p_rel)
@@ -409,14 +424,14 @@ def gen_metadata(
 
     # Finalize metadata lists (sorted lists from sets)
     dirs_final = sorted(list(metadata_dirs))
-    symlinks_final = sorted(list(metadata_symlinks))
+    symlinks_final = sorted(list(metadata_symlinks))  # Symlinks list already built and sorted
     regulars_final = sorted(list(metadata_regulars))
 
     # --- Perform Deletion ---
-    # Sort files to delete by path (longest first) to ensure subdirectories' files are deleted
-    # before parent directories are attempted. Path.unlink handles files, shutil.rmtree handles dirs.
-    files_to_delete = sorted([p for p in paths_to_delete_abs if p.is_file()], key=lambda x: str(x), reverse=True)
-    folders_to_delete = sorted([p for p in paths_to_delete_abs if p.is_dir()], key=lambda x: str(x), reverse=True)
+    # Sort paths to delete in reverse order to ensure subdirectories are deleted before parent directories
+    # and files before their containing directories.
+    files_to_delete = sorted([x for x in paths_to_delete_abs if x.is_file()], key=lambda x: str(x), reverse=True)
+    folders_to_delete = sorted([x for x in paths_to_delete_abs if x.is_dir()], key=lambda x: str(x), reverse=True)
 
     print("\n--- Deleting ignored/non-latest files and folders ---")
     for file_path in files_to_delete:
@@ -432,6 +447,8 @@ def gen_metadata(
     # symlinks.txt
     symlink_list = []
     for d in symlinks_final:
+        # Note: Broken symlinks are skipped from metadata collection in the first pass
+        # so `d` here should always be a valid symlink Path.
         symlink_target_path = os.readlink(os.path.join(target_dir, str(d)))
         symlink_entry = (
             f"{_join_mode_uid_gid(target_dir, str(d))},"
