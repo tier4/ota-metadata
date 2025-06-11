@@ -14,19 +14,13 @@
 
 import os
 from pathlib import Path  # Import Path for _list_non_latest_kernels return type
-import shutil  # Added for cleanup in tests, though tmp_path fixture is primary
-import pytest  # Added for specific assertions
-from pytest_unordered import unordered
 
 # Assuming metadata_gen.py is in the same directory or importable path
 import metadata_gen
+from pytest_unordered import unordered
 
-
-# --- ORIGINAL TESTS (KEPT AS IS, WITH NECESSARY TYPE/FORMAT CONVERSION FOR ASSERTION) ---
 
 def test_get_latest_kernel_version(tmp_path):
-    import metadata_gen
-
     vmlinuzs = [
         "vmlinuz-5.15.0-27-generic",
         "vmlinuz-5.15.0-64-generic",
@@ -41,8 +35,6 @@ def test_get_latest_kernel_version(tmp_path):
 
 
 def test_list_non_latest_kernels(tmp_path):
-    import metadata_gen
-
     vmlinuzs = [
         "vmlinuz-5.15.0-27-generic",
         "vmlinuz-5.15.0-64-generic",  # latest kernel
@@ -82,8 +74,6 @@ def test_list_non_latest_kernels(tmp_path):
 
 
 def test_list_non_latest_kernels_empty(tmp_path):
-    import metadata_gen
-
     (tmp_path / "extlinux").mkdir()
     (tmp_path / "extlinux" / "extlinux.conf").write_text("")
 
@@ -93,9 +83,6 @@ def test_list_non_latest_kernels_empty(tmp_path):
 
 
 def test_gen_metadata_method(tmp_path):
-    import metadata_gen
-    import os
-
     vmlinuzs = [
         "vmlinuz-5.15.0-27-generic",
         "vmlinuz-5.15.0-64-generic",  # latest kernel
@@ -195,53 +182,6 @@ def test_gen_metadata_method(tmp_path):
     assert metadata_gen._encapsulate(str(build_file2.relative_to(tmp_path)), prefix="/") in regulars_content
     assert metadata_gen._encapsulate(str(src_file1.relative_to(tmp_path)), prefix="/") in regulars_content
     assert not metadata_gen._encapsulate(str(src_file2.relative_to(tmp_path)), prefix="/") in regulars_content
-
-
-# --- NEW TESTS FOR DELETION LOGIC (UNCHANGED FROM LAST TURN) ---
-
-def setup_kernel_files_for_deletion_tests(base_path: Path):
-    """Helper to create kernel and initrd files for deletion testing, focusing on latest vs old."""
-    vmlinuzs = [
-        "vmlinuz-5.15.0-27-generic",
-        "vmlinuz-5.15.0-64-generic",  # latest kernel
-        "vmlinuz-5.4.0-102-generic",
-    ]
-    initrd_imgs = [
-        "initrd.img-5.15.0-65-generic",  # A non-matching newer version for latest
-        "initrd.img-5.15.0-64-generic",  # Matching latest
-        "initrd.img-5.4.0-102-generic",
-    ]
-    system_maps = [
-        "System.map-5.15.0-64-generic",
-        "System.map-5.4.0-102-generic",
-    ]
-    configs = [
-        "config-5.15.0-64-generic",
-        "config-5.4.0-102-generic",
-    ]
-
-    boot_dir = base_path / "boot"
-    boot_dir.mkdir(exist_ok=True)
-
-    created_paths = []
-    for vmlinuz in vmlinuzs:
-        p = boot_dir / vmlinuz
-        p.write_text("vmlinuz content")
-        created_paths.append(p)
-    for initrd_img in initrd_imgs:
-        p = boot_dir / initrd_img
-        p.write_text("initrd content")
-        created_paths.append(p)
-    for smap in system_maps:
-        p = boot_dir / smap
-        p.write_text("smap content")
-        created_paths.append(p)
-    for cfg in configs:
-        p = boot_dir / cfg
-        p.write_text("cfg content")
-        created_paths.append(p)
-
-    return boot_dir, created_paths
 
 
 def test_deletion_basic_ignored_file_and_dir(tmp_path):
@@ -370,10 +310,6 @@ def test_no_deletion_of_ignored_symlink_target(tmp_path):
         filesize_threshold=0,
     )
 
-    # Assertions
-    # This assertion was failing because the `gen_metadata.py` script was not protecting
-    # general symlink targets from deletion if not matching special Autoware patterns.
-    # The `gen_metadata.py` has been updated to protect ALL symlink targets.
     assert ignored_target_file.exists(), f"{ignored_target_file} (ignored but symlink target) should NOT be deleted."
     assert symlink_to_ignored_target.is_symlink(), f"{symlink_to_ignored_target} (symlink) should not be deleted."
 
@@ -387,6 +323,51 @@ def test_no_deletion_of_ignored_symlink_target(tmp_path):
     assert metadata_gen._encapsulate(str(ignored_target_file.relative_to(target_dir)), prefix="/") in regulars_content
     assert metadata_gen._encapsulate(str(ignored_target_file.parent.relative_to(target_dir)),
                                      prefix="/") in dirs_content
+
+
+def setup_kernel_files_for_deletion_tests(base_path: Path):
+    """Helper to create kernel and initrd files for deletion testing, focusing on latest vs old."""
+    vmlinuzs = [
+        "vmlinuz-5.15.0-27-generic",
+        "vmlinuz-5.15.0-64-generic",  # latest kernel
+        "vmlinuz-5.4.0-102-generic",
+    ]
+    initrd_imgs = [
+        "initrd.img-5.15.0-65-generic",  # A non-matching newer version for latest
+        "initrd.img-5.15.0-64-generic",  # Matching latest
+        "initrd.img-5.4.0-102-generic",
+    ]
+    system_maps = [
+        "System.map-5.15.0-64-generic",
+        "System.map-5.4.0-102-generic",
+    ]
+    configs = [
+        "config-5.15.0-64-generic",
+        "config-5.4.0-102-generic",
+    ]
+
+    boot_dir = base_path / "boot"
+    boot_dir.mkdir(exist_ok=True)
+
+    created_paths = []
+    for vmlinuz in vmlinuzs:
+        p = boot_dir / vmlinuz
+        p.write_text("vmlinuz content")
+        created_paths.append(p)
+    for initrd_img in initrd_imgs:
+        p = boot_dir / initrd_img
+        p.write_text("initrd content")
+        created_paths.append(p)
+    for smap in system_maps:
+        p = boot_dir / smap
+        p.write_text("smap content")
+        created_paths.append(p)
+    for cfg in configs:
+        p = boot_dir / cfg
+        p.write_text("cfg content")
+        created_paths.append(p)
+
+    return boot_dir, created_paths
 
 
 def test_deletion_of_non_latest_kernels_only(tmp_path):

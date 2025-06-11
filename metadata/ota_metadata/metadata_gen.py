@@ -15,19 +15,19 @@
 # limitations under the License.
 
 
+import argparse
+import glob
 import os
 import re
-import glob
-import argparse
 import shutil
-
-import zstandard
-import igittigitt
+from functools import cmp_to_key
 from hashlib import sha256
 from pathlib import Path
-from packaging import version
-from functools import cmp_to_key
 from typing import Set, List, Optional  # Added for type hinting
+
+import igittigitt
+import zstandard
+from packaging import version
 
 ZSTD_COMPRESSION_EXTENSION = "zst"
 ZSTD_COMPRESSION_LEVEL = 10
