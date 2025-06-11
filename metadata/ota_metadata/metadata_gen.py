@@ -134,11 +134,9 @@ def _delete_file(path: str) -> bool:
     """
     try:
         file_path = Path(path)
-        if file_path.exists() and file_path.is_file():  # Check before deleting
-            file_path.unlink()
-            print(f"Deleted file: {path}")
-            return True
-        return False  # File didn't exist or wasn't a file
+        file_path.unlink(missing_ok=True)
+        print(f"Deleted file: {path}")
+        return True
     except Exception as e:
         print(f"Error deleting file {path}: {e}")
         return False
@@ -281,17 +279,36 @@ def gen_metadata(
     target_abs = Path(os.path.abspath(target_dir))
     ignore = ignore_rules(target_dir, ignore_file)
 
+    """
+    If ignore file has the following directories:
+       1, "home/autoware/*/build"
+       2, "home/autoware/*/src"
+    We will NOT simply ignore files under them.
+    We will check the following:
+       1, If the file is set as the target of a symblink ?
+       2, If the file falls in some special folder pattern ?
+    Why we need to do this? It is explained in this document
+    https://tier4.atlassian.net/wiki/x/JoC21Q
+    """
     check_patterns = [
         re.compile(r"home/autoware/[^/]+/build"),
         re.compile(r"home/autoware/[^/]+/src"),
     ]
+    # Special Patterns that we need to check and add files.
     build_folder_patterns = [
         re.compile(r"home/autoware/[^/]*/build/.*/hook/.*"),
         re.compile(r"home/autoware/[^/]*/build/.*/.*.egg-info/.*"),
         re.compile(r"home/autoware/[^/]*/build/.*/.*.so$"),
     ]
 
-    # Determine if special symlink checking logic for 'build'/'src' is needed
+    """
+    Determine if special symlink checking logic for 'build'/'src' is needed
+    To limit the effect on existing customers
+    We check if any of the ignore rules match the special patterns.
+    i.e. 
+        1, "home/autoware/*/build"
+        2, "home/autoware/*/src"
+    """
     check_symlink_special_case = any(
         _pattern.search(str(_rule))
         for _rule in ignore.rules
@@ -354,7 +371,7 @@ def gen_metadata(
                 if f_abs.parent.name == "boot":
                     print(f"  SKIPPED FOR DELETION (is symlink): {f_abs.name}")
                 # --- END DEBUG PRINT ---
-                continue  # Skip to next file, symlinks are handled in terms of deletion
+                continue  # Skip to the next file, symlinks are handled in terms of deletion
 
             # --- Decision Logic for Files/Directories (non-symlinks) ---
             should_be_deleted = False
