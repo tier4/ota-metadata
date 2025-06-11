@@ -307,7 +307,7 @@ def gen_metadata(
     Determine if special symlink checking logic for 'build'/'src' is needed
     To limit the effect on existing customers
     We check if any of the ignore rules match the special patterns.
-    i.e. 
+    i.e.
         1, "home/autoware/*/build"
         2, "home/autoware/*/src"
     """
