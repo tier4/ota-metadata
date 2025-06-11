@@ -32,16 +32,16 @@ from packaging import version
 ZSTD_COMPRESSION_EXTENSION = "zst"
 ZSTD_COMPRESSION_LEVEL = 10
 ZSTD_MULTITHREADS = 2
-CHUNK_SIZE = 4 * (1024 ** 2)  # 4MiB
+CHUNK_SIZE = 4 * (1024**2)  # 4MiB
 
 
 def zstd_compress_file(
-        cctx: zstandard.ZstdCompressor,
-        src_fpath: str,
-        dst_fpath: str,
-        *,
-        cmpr_ratio: float,
-        filesize_threshold: int,
+    cctx: zstandard.ZstdCompressor,
+    src_fpath: str,
+    dst_fpath: str,
+    *,
+    cmpr_ratio: float,
+    filesize_threshold: int,
 ) -> bool:
     if (src_size := os.path.getsize(src_fpath)) < filesize_threshold:
         return False  # skip file with too small size
@@ -52,8 +52,8 @@ def zstd_compress_file(
                 compressor.write(data)
     # drop compressed file if cmpr ratio is too small or compressed failed
     if (
-            not (compressed_bytes := os.path.getsize(dst_fpath))
-            or src_size / compressed_bytes < cmpr_ratio
+        not (compressed_bytes := os.path.getsize(dst_fpath))
+        or src_size / compressed_bytes < cmpr_ratio
     ):
         try:
             os.remove(dst_fpath)
@@ -85,7 +85,9 @@ def _encapsulate(name: str, prefix: str = "") -> str:
     return f"'{os.path.join(prefix, escaped)}'"
 
 
-def _decapsulate(name):  # This function is not used in the provided code, can be removed
+def _decapsulate(
+    name,
+):  # This function is not used in the provided code, can be removed
     return name[1:-1].replace("'\\''", "'")
 
 
@@ -119,7 +121,9 @@ def ignore_rules(target_dir: str, ignore_file: str) -> igittigitt.IgnoreParser:
                 line = line.rstrip("\n")
                 parser.add_rule(line, base_path=target_dir)
     except FileNotFoundError:
-        print(f"Warning: Ignore file '{ignore_file}' not found. No files will be ignored based on rules.")
+        print(
+            f"Warning: Ignore file '{ignore_file}' not found. No files will be ignored based on rules."
+        )
     return parser
 
 
@@ -201,7 +205,9 @@ def _list_non_latest_kernels(boot_dir: Path) -> Set[Path]:
         vmlinuz_latest = _get_latest_kernel_version(boot_dir)
         k_ma = pa.match(vmlinuz_latest.name)
         if not k_ma:
-            raise Exception(f"Could not parse version from latest kernel file: {vmlinuz_latest.name}")
+            raise Exception(
+                f"Could not parse version from latest kernel file: {vmlinuz_latest.name}"
+            )
 
         ver = k_ma["version"]
         suf = k_ma["suffix"]
@@ -210,13 +216,31 @@ def _list_non_latest_kernels(boot_dir: Path) -> Set[Path]:
         config_latest = vmlinuz_latest.parent / f"config-{ver}{suf}"
 
         # Collect all relevant files that are not symlinks
-        all_kernel_files = {Path(f) for f in glob.glob(str(boot_dir / "vmlinuz-*")) if not Path(f).is_symlink()}
-        all_initrd_files = {Path(f) for f in glob.glob(str(boot_dir / "initrd.img-*")) if not Path(f).is_symlink()}
-        all_system_map_files = {Path(f) for f in glob.glob(str(boot_dir / "System.map-*")) if not Path(f).is_symlink()}
-        all_config_files = {Path(f) for f in glob.glob(str(boot_dir / "config-*")) if not Path(f).is_symlink()}
+        all_kernel_files = {
+            Path(f)
+            for f in glob.glob(str(boot_dir / "vmlinuz-*"))
+            if not Path(f).is_symlink()
+        }
+        all_initrd_files = {
+            Path(f)
+            for f in glob.glob(str(boot_dir / "initrd.img-*"))
+            if not Path(f).is_symlink()
+        }
+        all_system_map_files = {
+            Path(f)
+            for f in glob.glob(str(boot_dir / "System.map-*"))
+            if not Path(f).is_symlink()
+        }
+        all_config_files = {
+            Path(f)
+            for f in glob.glob(str(boot_dir / "config-*"))
+            if not Path(f).is_symlink()
+        }
 
         if initrd_img_latest not in all_initrd_files:
-            raise Exception(f"{initrd_img_latest} (initrd for latest kernel) doesn't exist.")
+            raise Exception(
+                f"{initrd_img_latest} (initrd for latest kernel) doesn't exist."
+            )
 
         # Add all currently found files to the set of non_latest_kernels
         non_latest_kernels.update(all_kernel_files)
@@ -231,25 +255,27 @@ def _list_non_latest_kernels(boot_dir: Path) -> Set[Path]:
         non_latest_kernels.discard(config_latest)  # Optional, may not exist
 
     except Exception as e:
-        print(f"Warning: Could not determine non-latest kernels due to error: {e}. Skipping kernel exclusion.")
+        print(
+            f"Warning: Could not determine non-latest kernels due to error: {e}. Skipping kernel exclusion."
+        )
         return set()  # Return empty set if an error occurs
 
     return non_latest_kernels
 
 
 def gen_metadata(
-        target_dir: str,
-        compressed_dir: Optional[str],
-        prefix: str,
-        output_dir: str,
-        directory_file: str,
-        symlink_file: str,
-        regular_file: str,
-        total_regular_size_file: str,
-        ignore_file: str,
-        *,
-        cmpr_ratio: float,
-        filesize_threshold: int,
+    target_dir: str,
+    compressed_dir: Optional[str],
+    prefix: str,
+    output_dir: str,
+    directory_file: str,
+    symlink_file: str,
+    regular_file: str,
+    total_regular_size_file: str,
+    ignore_file: str,
+    *,
+    cmpr_ratio: float,
+    filesize_threshold: int,
 ):
     p = Path(target_dir)
     target_abs = Path(os.path.abspath(target_dir))
@@ -283,7 +309,9 @@ def gen_metadata(
     # Identify non-latest kernels (absolute paths)
     non_latest_kernels_abs = _list_non_latest_kernels(p / "boot")
     # --- DEBUG PRINT ---
-    print(f"\n--- DEBUG: Non-latest kernels identified by _list_non_latest_kernels: {non_latest_kernels_abs} ---")
+    print(
+        f"\n--- DEBUG: Non-latest kernels identified by _list_non_latest_kernels: {non_latest_kernels_abs} ---"
+    )
     # --- END DEBUG PRINT ---
 
     # First Pass: Categorize and identify initial deletion candidates
@@ -292,21 +320,29 @@ def gen_metadata(
         try:
             # Skip symlink loops and broken symlinks
             if f_abs.is_symlink() and not f_abs.exists():
-                print(f"WARN: Broken symlink detected: {f_abs}. Skipping collection for metadata.")
+                print(
+                    f"WARN: Broken symlink detected: {f_abs}. Skipping collection for metadata."
+                )
                 # We still keep track of it as an existing path if it's not removed by ignore rules
                 # This ensures it's not marked for deletion if it's the only thing in its parent dir.
                 continue
 
             f_rel = f_abs.relative_to(target_dir)
 
-            is_ignored = ignore.match(target_abs / str(f_rel))  # Match using absolute path of relative
+            is_ignored = ignore.match(
+                target_abs / str(f_rel)
+            )  # Match using absolute path of relative
             is_symlink = f_abs.is_symlink()
             is_non_latest_kernel = f_abs in non_latest_kernels_abs
 
             # --- DEBUG PRINTS START ---
-            if f_abs.parent.name == "boot":  # Only print for files in the boot directory to keep output concise
+            if (
+                f_abs.parent.name == "boot"
+            ):  # Only print for files in the boot directory to keep output concise
                 print(f"\n--- Processing: {f_abs.name} ---")
-                print(f"  Is non-latest kernel (from _list_non_latest_kernels): {is_non_latest_kernel}")
+                print(
+                    f"  Is non-latest kernel (from _list_non_latest_kernels): {is_non_latest_kernel}"
+                )
                 print(f"  Is symlink: {is_symlink}")
                 print(f"  Is ignored: {is_ignored}")
             # --- DEBUG PRINTS END ---
@@ -331,14 +367,18 @@ def gen_metadata(
                 should_be_kept_despite_ignore = False
                 if check_symlink_special_case:
                     # Check if the path itself or its components are special 'autoware/build' or 'autoware/src' patterns
-                    is_in_special_autoware_pattern = any(pattern.search(str(f_rel)) for pattern in check_patterns)
+                    is_in_special_autoware_pattern = any(
+                        pattern.search(str(f_rel)) for pattern in check_patterns
+                    )
 
                     if is_in_special_autoware_pattern:
                         if f_abs.is_dir():
                             should_be_kept_despite_ignore = True
                         elif f_abs.is_file():
                             is_special_build_file_type = any(
-                                _file_pattern.search(str(f_rel)) for _file_pattern in build_folder_patterns)
+                                _file_pattern.search(str(f_rel))
+                                for _file_pattern in build_folder_patterns
+                            )
                             if is_special_build_file_type:
                                 should_be_kept_despite_ignore = True
 
@@ -369,16 +409,24 @@ def gen_metadata(
     # This ensures that any file/directory that is the target of a symlink (and exists)
     # is NOT deleted, and its metadata is collected.
     symlink_targets_for_metadata_and_protection: Set[Path] = set()
-    for symlink_rel_path in metadata_symlinks:  # Iterate through symlinks we've decided to keep in metadata
+    for (
+        symlink_rel_path
+    ) in (
+        metadata_symlinks
+    ):  # Iterate through symlinks we've decided to keep in metadata
         try:
             symlink_abs_path = p / symlink_rel_path
             symlink_target_raw = os.readlink(str(symlink_abs_path))  # target as string
 
             # Resolve the absolute path of the symlink target
             if Path(symlink_target_raw).is_absolute():
-                target_abs_path = Path(target_abs.root) / symlink_target_raw.lstrip(os.sep)
+                target_abs_path = Path(target_abs.root) / symlink_target_raw.lstrip(
+                    os.sep
+                )
             else:
-                target_abs_path = (symlink_abs_path.parent / symlink_target_raw).resolve()
+                target_abs_path = (
+                    symlink_abs_path.parent / symlink_target_raw
+                ).resolve()
 
             # Only process if the target exists and is within the target_dir
             if target_abs_path.exists() and target_abs_path.is_relative_to(target_abs):
@@ -397,7 +445,9 @@ def gen_metadata(
                             break
 
                         # Add to metadata set (unconditionally, as it's part of a kept path)
-                        symlink_targets_for_metadata_and_protection.add(current_partial_path)
+                        symlink_targets_for_metadata_and_protection.add(
+                            current_partial_path
+                        )
 
                         # And, if this path (file or dir) was marked for deletion, remove it.
                         if abs_current_partial_path in paths_to_delete_abs:
@@ -405,14 +455,21 @@ def gen_metadata(
             else:
                 # Print info for symlinks pointing outside target_dir or to non-existent targets
                 print(
-                    f"INFO: Symlink {symlink_rel_path} targets outside {target_dir} or to non-existent target: {symlink_target_raw}. Not including target in metadata.")
+                    f"INFO: Symlink {symlink_rel_path} targets outside {target_dir} or to non-existent target: {symlink_target_raw}. Not including target in metadata."
+                )
 
-        except OSError as e:  # Handle broken symlinks or permission issues during readlink
+        except (
+            OSError
+        ) as e:  # Handle broken symlinks or permission issues during readlink
             # This case is now mostly handled by the initial `f_abs.is_symlink() and not f_abs.exists()` check.
             # But this is here for safety if readlink still fails for other reasons.
-            print(f"WARN: Failed to read symlink target for {symlink_rel_path}: {e}. Skipping target processing.")
+            print(
+                f"WARN: Failed to read symlink target for {symlink_rel_path}: {e}. Skipping target processing."
+            )
         except Exception as e:
-            print(f"Error processing symlink target for {symlink_rel_path}: {e}. Skipping.")
+            print(
+                f"Error processing symlink target for {symlink_rel_path}: {e}. Skipping."
+            )
 
     # Incorporate the symlink targets and their parent dirs into our main metadata lists
     for p_rel in symlink_targets_for_metadata_and_protection:
@@ -424,14 +481,24 @@ def gen_metadata(
 
     # Finalize metadata lists (sorted lists from sets)
     dirs_final = sorted(list(metadata_dirs))
-    symlinks_final = sorted(list(metadata_symlinks))  # Symlinks list already built and sorted
+    symlinks_final = sorted(
+        list(metadata_symlinks)
+    )  # Symlinks list already built and sorted
     regulars_final = sorted(list(metadata_regulars))
 
     # --- Perform Deletion ---
     # Sort paths to delete in reverse order to ensure subdirectories are deleted before parent directories
     # and files before their containing directories.
-    files_to_delete = sorted([x for x in paths_to_delete_abs if x.is_file()], key=lambda x: str(x), reverse=True)
-    folders_to_delete = sorted([x for x in paths_to_delete_abs if x.is_dir()], key=lambda x: str(x), reverse=True)
+    files_to_delete = sorted(
+        [x for x in paths_to_delete_abs if x.is_file()],
+        key=lambda x: str(x),
+        reverse=True,
+    )
+    folders_to_delete = sorted(
+        [x for x in paths_to_delete_abs if x.is_dir()],
+        key=lambda x: str(x),
+        reverse=True,
+    )
 
     print("\n--- Deleting ignored/non-latest files and folders ---")
     for file_path in files_to_delete:
@@ -495,11 +562,11 @@ def gen_metadata(
                     compressed_dir, f"{sha256hash}.{ZSTD_COMPRESSION_EXTENSION}"
                 )
                 if os.path.exists(dst_f) or zstd_compress_file(
-                        cctx,
-                        src_f,
-                        dst_f,
-                        cmpr_ratio=cmpr_ratio,
-                        filesize_threshold=filesize_threshold,
+                    cctx,
+                    src_f,
+                    dst_f,
+                    cmpr_ratio=cmpr_ratio,
+                    filesize_threshold=filesize_threshold,
                 ):
                     compress_alg = ZSTD_COMPRESSION_EXTENSION
 

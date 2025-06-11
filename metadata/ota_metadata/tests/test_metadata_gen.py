@@ -146,8 +146,12 @@ def test_gen_metadata_method(tmp_path):
     # Symlink targets as they would appear in os.readlink()
     # Correcting symlink creation for clarity and accuracy in testing targets
     os.symlink(str(build_file1.absolute()), str(install_file1))  # Absolute target
-    os.symlink(os.path.relpath(build_file2, install_folder), str(install_file2))  # Relative target from symlink parent
-    os.symlink(os.path.relpath(src_file1, install_folder), str(install_file3))  # Relative target from symlink parent
+    os.symlink(
+        os.path.relpath(build_file2, install_folder), str(install_file2)
+    )  # Relative target from symlink parent
+    os.symlink(
+        os.path.relpath(src_file1, install_folder), str(install_file3)
+    )  # Relative target from symlink parent
 
     metadata_gen.gen_metadata(
         target_dir=str(tmp_path),
@@ -168,20 +172,47 @@ def test_gen_metadata_method(tmp_path):
 
     # Corrected assertions for symlink file content format
     # Link name part (this is how _encapsulate forms the name for the symlink itself)
-    assert metadata_gen._encapsulate(str(install_file1.relative_to(tmp_path)), prefix="/") in symlinks_content
-    assert metadata_gen._encapsulate(str(install_file2.relative_to(tmp_path)), prefix="/") in symlinks_content
-    assert metadata_gen._encapsulate(str(install_file3.relative_to(tmp_path)), prefix="/") in symlinks_content
+    assert (
+        metadata_gen._encapsulate(str(install_file1.relative_to(tmp_path)), prefix="/")
+        in symlinks_content
+    )
+    assert (
+        metadata_gen._encapsulate(str(install_file2.relative_to(tmp_path)), prefix="/")
+        in symlinks_content
+    )
+    assert (
+        metadata_gen._encapsulate(str(install_file3.relative_to(tmp_path)), prefix="/")
+        in symlinks_content
+    )
 
     # Link target part (this is how _encapsulate forms the target from os.readlink())
-    assert metadata_gen._encapsulate(os.readlink(str(install_file1))) in symlinks_content
-    assert metadata_gen._encapsulate(os.readlink(str(install_file2))) in symlinks_content
-    assert metadata_gen._encapsulate(os.readlink(str(install_file3))) in symlinks_content
+    assert (
+        metadata_gen._encapsulate(os.readlink(str(install_file1))) in symlinks_content
+    )
+    assert (
+        metadata_gen._encapsulate(os.readlink(str(install_file2))) in symlinks_content
+    )
+    assert (
+        metadata_gen._encapsulate(os.readlink(str(install_file3))) in symlinks_content
+    )
 
     # Corrected assertions for regular file content format
-    assert metadata_gen._encapsulate(str(build_file1.relative_to(tmp_path)), prefix="/") in regulars_content
-    assert metadata_gen._encapsulate(str(build_file2.relative_to(tmp_path)), prefix="/") in regulars_content
-    assert metadata_gen._encapsulate(str(src_file1.relative_to(tmp_path)), prefix="/") in regulars_content
-    assert not metadata_gen._encapsulate(str(src_file2.relative_to(tmp_path)), prefix="/") in regulars_content
+    assert (
+        metadata_gen._encapsulate(str(build_file1.relative_to(tmp_path)), prefix="/")
+        in regulars_content
+    )
+    assert (
+        metadata_gen._encapsulate(str(build_file2.relative_to(tmp_path)), prefix="/")
+        in regulars_content
+    )
+    assert (
+        metadata_gen._encapsulate(str(src_file1.relative_to(tmp_path)), prefix="/")
+        in regulars_content
+    )
+    assert (
+        not metadata_gen._encapsulate(str(src_file2.relative_to(tmp_path)), prefix="/")
+        in regulars_content
+    )
 
 
 def test_deletion_basic_ignored_file_and_dir(tmp_path):
@@ -269,14 +300,28 @@ def test_no_deletion_of_symlinks_themselves(tmp_path):
 
     # Assertions
     assert target_file.exists(), f"{target_file} (symlink's target) should exist."
-    assert ignored_symlink.is_symlink(), f"{ignored_symlink} (ignored symlink) should exist and be a symlink."
-    assert broken_symlink.is_symlink(), f"{broken_symlink} (broken symlink) should exist and be a symlink."
+    assert (
+        ignored_symlink.is_symlink()
+    ), f"{ignored_symlink} (ignored symlink) should exist and be a symlink."
+    assert (
+        broken_symlink.is_symlink()
+    ), f"{broken_symlink} (broken symlink) should exist and be a symlink."
 
     # Check metadata: symlinks should be included, using the _encapsulate format
     symlinks_content = (output_dir / "symlinks.txt").read_text()
-    assert metadata_gen._encapsulate(str(ignored_symlink.relative_to(target_dir)), prefix="/") in symlinks_content
+    assert (
+        metadata_gen._encapsulate(
+            str(ignored_symlink.relative_to(target_dir)), prefix="/"
+        )
+        in symlinks_content
+    )
     # BROKEN SYMLINKS ARE SKIPPED FROM METADATA IN gen_metadata.py, so this assertion should be `not in`
-    assert metadata_gen._encapsulate(str(broken_symlink.relative_to(target_dir)), prefix="/") not in symlinks_content
+    assert (
+        metadata_gen._encapsulate(
+            str(broken_symlink.relative_to(target_dir)), prefix="/"
+        )
+        not in symlinks_content
+    )
 
 
 def test_no_deletion_of_ignored_symlink_target(tmp_path):
@@ -310,19 +355,36 @@ def test_no_deletion_of_ignored_symlink_target(tmp_path):
         filesize_threshold=0,
     )
 
-    assert ignored_target_file.exists(), f"{ignored_target_file} (ignored but symlink target) should NOT be deleted."
-    assert symlink_to_ignored_target.is_symlink(), f"{symlink_to_ignored_target} (symlink) should not be deleted."
+    assert (
+        ignored_target_file.exists()
+    ), f"{ignored_target_file} (ignored but symlink target) should NOT be deleted."
+    assert (
+        symlink_to_ignored_target.is_symlink()
+    ), f"{symlink_to_ignored_target} (symlink) should not be deleted."
 
     # Check metadata: both symlink and its target should be included
     symlinks_content = (output_dir / "symlinks.txt").read_text()
     regulars_content = (output_dir / "regulars.txt").read_text()
     dirs_content = (output_dir / "dirs.txt").read_text()
 
-    assert metadata_gen._encapsulate(str(symlink_to_ignored_target.relative_to(target_dir)),
-                                     prefix="/") in symlinks_content
-    assert metadata_gen._encapsulate(str(ignored_target_file.relative_to(target_dir)), prefix="/") in regulars_content
-    assert metadata_gen._encapsulate(str(ignored_target_file.parent.relative_to(target_dir)),
-                                     prefix="/") in dirs_content
+    assert (
+        metadata_gen._encapsulate(
+            str(symlink_to_ignored_target.relative_to(target_dir)), prefix="/"
+        )
+        in symlinks_content
+    )
+    assert (
+        metadata_gen._encapsulate(
+            str(ignored_target_file.relative_to(target_dir)), prefix="/"
+        )
+        in regulars_content
+    )
+    assert (
+        metadata_gen._encapsulate(
+            str(ignored_target_file.parent.relative_to(target_dir)), prefix="/"
+        )
+        in dirs_content
+    )
 
 
 def setup_kernel_files_for_deletion_tests(base_path: Path):
@@ -385,7 +447,9 @@ def test_deletion_of_non_latest_kernels_only(tmp_path):
     latest_initrd_name = f"initrd.img-{latest_kernel.name.split('vmlinuz-')[1]}"
     latest_initrd = boot_dir / latest_initrd_name
     # Also identify the System.map and config files for the latest kernel
-    latest_system_map = boot_dir / f"System.map-{latest_kernel.name.split('vmlinuz-')[1]}"
+    latest_system_map = (
+        boot_dir / f"System.map-{latest_kernel.name.split('vmlinuz-')[1]}"
+    )
     latest_config = boot_dir / f"config-{latest_kernel.name.split('vmlinuz-')[1]}"
 
     # Identify paths that should NOT be deleted (latest kernel/initrd/system.map/config, or symlinks, or symlink targets)
@@ -408,7 +472,9 @@ def test_deletion_of_non_latest_kernels_only(tmp_path):
     # This also means this old kernel and its symlink are kept.
     os.symlink(str(old_kernel_target_of_symlink), str(symlink_to_old_kernel))
     paths_expected_to_be_kept.append(symlink_to_old_kernel)  # The symlink itself
-    paths_expected_to_be_kept.append(old_kernel_target_of_symlink)  # Its target (which is an old kernel)
+    paths_expected_to_be_kept.append(
+        old_kernel_target_of_symlink
+    )  # Its target (which is an old kernel)
 
     # Identify paths that ARE old kernels and are NOT symlinks AND are NOT symlink targets
     paths_expected_to_be_deleted_by_rule = []
@@ -436,10 +502,14 @@ def test_deletion_of_non_latest_kernels_only(tmp_path):
 
     # Assertions on deletion
     for p_deleted in paths_expected_to_be_deleted_by_rule:
-        assert not p_deleted.exists(), f"{p_deleted} should have been deleted (old kernel, not symlinked)."
+        assert (
+            not p_deleted.exists()
+        ), f"{p_deleted} should have been deleted (old kernel, not symlinked)."
 
     for p_kept in paths_expected_to_be_kept:
-        assert p_kept.exists(), f"{p_kept} should have been kept (latest kernel or symlink/target)."
+        assert (
+            p_kept.exists()
+        ), f"{p_kept} should have been kept (latest kernel or symlink/target)."
         if p_kept.is_file():
             assert p_kept.is_file(), f"{p_kept} should still be a file."
         elif p_kept.is_dir():
@@ -453,26 +523,71 @@ def test_deletion_of_non_latest_kernels_only(tmp_path):
     dirs_content = (output_dir / "dirs.txt").read_text()
 
     # Assert paths that should be in metadata
-    assert metadata_gen._encapsulate(str(latest_kernel.relative_to(target_dir)), prefix="/") in regulars_content
-    assert metadata_gen._encapsulate(str(latest_initrd.relative_to(target_dir)), prefix="/") in regulars_content
+    assert (
+        metadata_gen._encapsulate(
+            str(latest_kernel.relative_to(target_dir)), prefix="/"
+        )
+        in regulars_content
+    )
+    assert (
+        metadata_gen._encapsulate(
+            str(latest_initrd.relative_to(target_dir)), prefix="/"
+        )
+        in regulars_content
+    )
 
     if latest_system_map.exists():
-        assert metadata_gen._encapsulate(str(latest_system_map.relative_to(target_dir)), prefix="/") in regulars_content
+        assert (
+            metadata_gen._encapsulate(
+                str(latest_system_map.relative_to(target_dir)), prefix="/"
+            )
+            in regulars_content
+        )
     if latest_config.exists():
-        assert metadata_gen._encapsulate(str(latest_config.relative_to(target_dir)), prefix="/") in regulars_content
+        assert (
+            metadata_gen._encapsulate(
+                str(latest_config.relative_to(target_dir)), prefix="/"
+            )
+            in regulars_content
+        )
 
-    assert metadata_gen._encapsulate(str(boot_dir.relative_to(target_dir)),
-                                     prefix="/") in dirs_content  # Boot directory should always be there
+    assert (
+        metadata_gen._encapsulate(str(boot_dir.relative_to(target_dir)), prefix="/")
+        in dirs_content
+    )  # Boot directory should always be there
 
     if symlink_to_old_kernel.exists():
-        assert metadata_gen._encapsulate(str(symlink_to_old_kernel.relative_to(target_dir)),
-                                         prefix="/") in symlinks_content
+        assert (
+            metadata_gen._encapsulate(
+                str(symlink_to_old_kernel.relative_to(target_dir)), prefix="/"
+            )
+            in symlinks_content
+        )
         # The target of the symlink is also kept and should be in regulars
-        assert metadata_gen._encapsulate(str(old_kernel_target_of_symlink.relative_to(target_dir)),
-                                         prefix="/") in regulars_content
+        assert (
+            metadata_gen._encapsulate(
+                str(old_kernel_target_of_symlink.relative_to(target_dir)), prefix="/"
+            )
+            in regulars_content
+        )
 
     # Assert paths that should NOT be in metadata (because they were deleted)
     for p_deleted in paths_expected_to_be_deleted_by_rule:
-        assert metadata_gen._encapsulate(str(p_deleted.relative_to(target_dir)), prefix="/") not in regulars_content
-        assert metadata_gen._encapsulate(str(p_deleted.relative_to(target_dir)), prefix="/") not in symlinks_content
-        assert metadata_gen._encapsulate(str(p_deleted.relative_to(target_dir)), prefix="/") not in dirs_content
+        assert (
+            metadata_gen._encapsulate(
+                str(p_deleted.relative_to(target_dir)), prefix="/"
+            )
+            not in regulars_content
+        )
+        assert (
+            metadata_gen._encapsulate(
+                str(p_deleted.relative_to(target_dir)), prefix="/"
+            )
+            not in symlinks_content
+        )
+        assert (
+            metadata_gen._encapsulate(
+                str(p_deleted.relative_to(target_dir)), prefix="/"
+            )
+            not in dirs_content
+        )
