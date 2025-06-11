@@ -134,8 +134,10 @@ def _delete_file(path: str) -> bool:
     """
     try:
         file_path = Path(path)
-        file_path.unlink(missing_ok=True)
-        print(f"Deleted file: {path}")
+        file_path.unlink(
+            missing_ok=True
+        )  # Use missing_ok=True to avoid FileNotFoundError if already deleted
+        # print(f"Deleted file: {path}") # Moved success message to gen_metadata for consolidated logging
         return True
     except Exception as e:
         print(f"Error deleting file {path}: {e}")
@@ -151,10 +153,10 @@ def _delete_folder(path: str) -> bool:
         folder_path = Path(path)
         if folder_path.exists() and folder_path.is_dir():  # Check before deleting
             shutil.rmtree(folder_path)
-            print(f"Deleted folder: {path}")
+            # print(f"Deleted folder: {path}") # Moved success message to gen_metadata for consolidated logging
             return True
         return False  # Folder didn't exist or wasn't a directory
-    except FileNotFoundError:
+    except FileNotFoundError:  # Should be caught by exists() check, but for safety
         print(f"Error: Directory {path} not found.")
         return False
     except PermissionError:
@@ -517,13 +519,40 @@ def gen_metadata(
         reverse=True,
     )
 
-    print("\n--- Deleting ignored/non-latest files and folders ---")
+    print("\n--- Files and Folders to be Deleted ---")
+    if files_to_delete:
+        print("Files to delete:")
+        for f in files_to_delete:
+            print(f"  - {f}")
+    else:
+        print("No files to delete.")
+
+    if folders_to_delete:
+        print("Folders to delete:")
+        for f in folders_to_delete:
+            print(f"  - {f}")
+    else:
+        print("No folders to delete.")
+
+    print("\n--- Initiating Deletion Process ---")
+
     for file_path in files_to_delete:
-        _delete_file(str(file_path))
+        success = _delete_file(str(file_path))
+        if success:
+            print(f"  SUCCESS: {file_path}")
+        else:
+            print(f"  FAILED: {file_path}")  # _delete_file already prints error details
 
     for folder_path in folders_to_delete:
-        _delete_folder(str(folder_path))
-    print("--- Deletion complete ---")
+        success = _delete_folder(str(folder_path))
+        if success:
+            print(f"  SUCCESS: {folder_path}")
+        else:
+            print(
+                f"  FAILED: {folder_path}"
+            )  # _delete_folder already prints error details
+
+    print("--- Deletion Process Complete ---")
 
     # --- Write Metadata Files ---
     os.makedirs(output_dir, exist_ok=True)
