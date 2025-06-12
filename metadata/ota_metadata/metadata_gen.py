@@ -76,7 +76,7 @@ def _file_sha256(filename: Path) -> str:
         return m.hexdigest()
 
 
-def _is_regular(path):  # This function is not used in the provided code, can be removed
+def _is_regular(path):
     return os.path.isfile(path) and not os.path.islink(path)
 
 
@@ -85,9 +85,7 @@ def _encapsulate(name: str, prefix: str = "") -> str:
     return f"'{os.path.join(prefix, escaped)}'"
 
 
-def _decapsulate(
-    name,
-):  # This function is not used in the provided code, can be removed
+def _decapsulate(name):
     return name[1:-1].replace("'\\''", "'")
 
 
@@ -114,17 +112,17 @@ def _join_mode_uid_gid(base: str, path: str, nlink: bool = False) -> str:
 
 
 def ignore_rules(target_dir: str, ignore_file: str) -> igittigitt.IgnoreParser:
-    parser = igittigitt.IgnoreParser()
+    ignore_parser = igittigitt.IgnoreParser()
     try:
         with open(ignore_file) as f:
             for line in f:
                 line = line.rstrip("\n")
-                parser.add_rule(line, base_path=target_dir)
+                ignore_parser.add_rule(line, base_path=target_dir)
     except FileNotFoundError:
         print(
             f"Warning: Ignore file '{ignore_file}' not found. No files will be ignored based on rules."
         )
-    return parser
+    return ignore_parser
 
 
 def _delete_file(path: str) -> bool:
@@ -612,7 +610,8 @@ def gen_metadata(
                 src_f = str(full_file_path)
                 dst_f = os.path.join(
                     compressed_dir, f"{sha256hash}.{ZSTD_COMPRESSION_EXTENSION}"
-                )
+                )  # add zstd extension to filename
+                # NOTE: skip already compressed file
                 if os.path.exists(dst_f) or zstd_compress_file(
                     cctx,  # type: ignore
                     src_f,
