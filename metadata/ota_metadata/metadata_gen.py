@@ -614,7 +614,7 @@ def gen_metadata(
                     compressed_dir, f"{sha256hash}.{ZSTD_COMPRESSION_EXTENSION}"
                 )
                 if os.path.exists(dst_f) or zstd_compress_file(
-                    cctx,
+                    cctx,  # type: ignore
                     src_f,
                     dst_f,
                     cmpr_ratio=cmpr_ratio,
