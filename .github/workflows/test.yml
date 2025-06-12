@@ -4,7 +4,7 @@ on: [pull_request]
 
 jobs:
   pytest_with_coverage:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 3
     strategy:
       matrix:
@@ -30,7 +30,7 @@ jobs:
           junitxml-path: ./pytest.xml
 
   python_lint_check:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 3
     strategy:
       matrix:
@@ -54,7 +54,7 @@ jobs:
           $pythonLocation/bin/python -m flake8 metadata/ota_metadata
 
   markdown_lint_check:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
       - name: Checkout commit
