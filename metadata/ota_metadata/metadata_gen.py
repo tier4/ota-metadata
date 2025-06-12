@@ -137,7 +137,6 @@ def _delete_file(path: str) -> bool:
         file_path.unlink(
             missing_ok=True
         )  # Use missing_ok=True to avoid FileNotFoundError if already deleted
-        # print(f"Deleted file: {path}") # Moved success message to gen_metadata for consolidated logging
         return True
     except Exception as e:
         print(f"Error deleting file {path}: {e}")
@@ -153,7 +152,6 @@ def _delete_folder(path: str) -> bool:
         folder_path = Path(path)
         if folder_path.exists() and folder_path.is_dir():  # Check before deleting
             shutil.rmtree(folder_path)
-            # print(f"Deleted folder: {path}") # Moved success message to gen_metadata for consolidated logging
             return True
         return False  # Folder didn't exist or wasn't a directory
     except FileNotFoundError:  # Should be caught by exists() check, but for safety
@@ -281,17 +279,15 @@ def gen_metadata(
     target_abs = Path(os.path.abspath(target_dir))
     ignore = ignore_rules(target_dir, ignore_file)
 
-    """
-    If ignore file has the following directories:
-       1, "home/autoware/*/build"
-       2, "home/autoware/*/src"
-    We will NOT simply ignore files under them.
-    We will check the following:
-       1, If the file is set as the target of a symblink ?
-       2, If the file falls in some special folder pattern ?
-    Why we need to do this? It is explained in this document
-    https://tier4.atlassian.net/wiki/x/JoC21Q
-    """
+    # If ignore file has the following directories:
+    #    1, "home/autoware/*/build"
+    #    2, "home/autoware/*/src"
+    # We will NOT simply ignore files under them.
+    # We will check the following:
+    #    1, If the file is set as the target of a symblink ?
+    #    2, If the file falls in some special folder pattern ?
+    # Why we need to do this? It is explained in this document
+    # https://tier4.atlassian.net/wiki/x/JoC21Q
     check_patterns = [
         re.compile(r"home/autoware/[^/]+/build"),
         re.compile(r"home/autoware/[^/]+/src"),
@@ -558,6 +554,10 @@ def gen_metadata(
     os.makedirs(output_dir, exist_ok=True)
 
     # symlinks.txt
+    # format:
+    # mode,uid,gid,'path/to/link','path/to/target'
+    # ex: 0777,1000,1000,'path/to/link','path/to/target'
+    # NOTE: mode is always 0777.
     symlink_list = []
     for d in symlinks_final:
         # Note: Broken symlinks are skipped from metadata collection in the first pass
@@ -573,6 +573,9 @@ def gen_metadata(
         _f.writelines("\n".join(symlink_list))
 
     # dirs.txt
+    # format:
+    # mode,uid,gid,'dir/name'
+    # ex: 0755,1000,1000,'path/to/dir'
     with open(os.path.join(output_dir, directory_file), "w") as _f:
         dirs_list = [
             f"{_join_mode_uid_gid(target_dir, str(d))},{_encapsulate(str(d), prefix=prefix)}"
@@ -581,6 +584,8 @@ def gen_metadata(
         _f.writelines("\n".join(dirs_list))
 
     # compression with zstd
+    # store the compressed file with its original file's hash and .zstd ext as name,
+    # directly under the <compressed_dir>
     cctx: Optional[zstandard.ZstdCompressor] = None
     if compressed_dir:
         os.makedirs(compressed_dir, exist_ok=True)
@@ -589,6 +594,9 @@ def gen_metadata(
         )
 
     # regulars.txt
+    # format:
+    # mode,uid,gid,link number,sha256sum,'path/to/file',size,inode,[compress_alg]
+    # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234,12345678,[zst]
     total_regular_size = 0
     with open(os.path.join(output_dir, regular_file), "w") as _f:
         regular_list = []
