@@ -299,14 +299,12 @@ def gen_metadata(
         re.compile(r"home/autoware/[^/]*/build/.*/.*.so$"),
     ]
 
-    """
-    Determine if special symlink checking logic for 'build'/'src' is needed
-    To limit the effect on existing customers
-    We check if any of the ignore rules match the special patterns.
-    i.e.
-        1, "home/autoware/*/build"
-        2, "home/autoware/*/src"
-    """
+    # Determine if special symlink checking logic for 'build'/'src' is needed
+    # To limit the effect on existing customers
+    # We check if any of the ignore rules match the special patterns.
+    # i.e.
+    #     1, "home/autoware/*/build"
+    #     2, "home/autoware/*/src"
     check_symlink_special_case = any(
         _pattern.search(str(_rule))
         for _rule in ignore.rules
