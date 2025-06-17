@@ -163,7 +163,7 @@ def _delete_folder(path: str) -> bool:
         raise  # exit the script early if an error occurs
 
 
-def _get_latest_kernel_version(boot_dir: Path):
+def _get_latest_kernel_version(boot_dir: Path) -> Path:
     kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
 
     pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
@@ -197,7 +197,7 @@ def _get_latest_kernel_version(boot_dir: Path):
     return Path(kfiles[0])  # latest
 
 
-def _list_non_latest_kernels(boot_dir: Path):
+def _list_non_latest_kernels(boot_dir: Path) -> list[str]:
     # if boot/extlinux/extlinux.conf exists, the kernel is specified in that file
     # so we don't need to pickup the latest kernel.
     if (boot_dir / "extlinux" / "extlinux.conf").is_file():
