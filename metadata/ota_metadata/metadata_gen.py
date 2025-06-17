@@ -20,14 +20,15 @@ import glob
 import os
 import re
 import shutil
+import zstandard
+
 from functools import cmp_to_key
 from hashlib import sha256
+from igittigitt import IgnoreParser
+from packaging import version
 from pathlib import Path
 from typing import Set, List
 
-import igittigitt
-import zstandard
-from packaging import version
 
 ZSTD_COMPRESSION_EXTENSION = "zst"
 ZSTD_COMPRESSION_LEVEL = 10
@@ -112,7 +113,7 @@ def _join_mode_uid_gid(base, path, nlink=False):
 
 
 def ignore_rules(target_dir, ignore_file):
-    ignore_parser = igittigitt.IgnoreParser()
+    ignore_parser = IgnoreParser()
     try:  # Added try-except for robust handling of missing ignore file
         with open(ignore_file) as f:
             for line in f:
