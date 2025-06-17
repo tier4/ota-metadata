@@ -23,7 +23,7 @@ import shutil
 from functools import cmp_to_key
 from hashlib import sha256
 from pathlib import Path
-from typing import Set, List, Optional  # Added for type hinting
+from typing import Set, List
 
 import igittigitt
 import zstandard
@@ -64,12 +64,12 @@ def zstd_compress_file(
     return True
 
 
-def _file_sha256(filename: Path) -> str:
-    ONE_MB = 1048576
+def _file_sha256(filename):
+    one_mb = 1048576
     with open(filename, "rb") as f:
         m = sha256()
         while True:
-            d = f.read(ONE_MB)
+            d = f.read(one_mb)
             if d == b"":
                 break
             m.update(d)
@@ -80,7 +80,7 @@ def _is_regular(path):
     return os.path.isfile(path) and not os.path.islink(path)
 
 
-def _encapsulate(name: str, prefix: str = "") -> str:
+def _encapsulate(name, prefix=""):
     escaped = name.replace("'", "'\\''")
     return f"'{os.path.join(prefix, escaped)}'"
 
@@ -89,12 +89,12 @@ def _decapsulate(name):
     return name[1:-1].replace("'\\''", "'")
 
 
-def _path_stat(base: str, path: str):
+def _path_stat(base, path):
     return os.lstat(os.path.join(base, path))  # NOTE: lstat doesn't follow symlink
 
 
 # return array of mode, uid and gid
-def _path_mode_uid_gid(base: str, path: str, nlink: bool = False) -> List[str]:
+def _path_mode_uid_gid(base, path, nlink=False):
     stat = _path_stat(base, path)
     if not nlink:
         return [oct(stat.st_mode)[-4:], str(stat.st_uid), str(stat.st_gid)]
@@ -107,21 +107,26 @@ def _path_mode_uid_gid(base: str, path: str, nlink: bool = False) -> List[str]:
         ]
 
 
-def _join_mode_uid_gid(base: str, path: str, nlink: bool = False) -> str:
+def _join_mode_uid_gid(base, path, nlink=False):
     return ",".join(_path_mode_uid_gid(base, path, nlink=nlink))
 
 
-def ignore_rules(target_dir: str, ignore_file: str) -> igittigitt.IgnoreParser:
+def ignore_rules(target_dir, ignore_file):
     ignore_parser = igittigitt.IgnoreParser()
-    try:
+    try:  # Added try-except for robust handling of missing ignore file
         with open(ignore_file) as f:
             for line in f:
                 line = line.rstrip("\n")
                 ignore_parser.add_rule(line, base_path=target_dir)
-    except FileNotFoundError:
+    except FileNotFoundError:  # Log a warning instead of crashing
         print(
             f"Warning: Ignore file '{ignore_file}' not found. No files will be ignored based on rules."
         )
+    except Exception as e:  # Catch other exceptions
+        print(
+            f"Error reading ignore file '{ignore_file}': {e}. No files will be ignored based on rules."
+        )
+        raise  # Exit the script early if an error occurs
     return ignore_parser
 
 
@@ -132,13 +137,12 @@ def _delete_file(path: str) -> bool:
     """
     try:
         file_path = Path(path)
-        file_path.unlink(
-            missing_ok=True
-        )  # Use missing_ok=True to avoid FileNotFoundError if already deleted
+        # Use missing_ok=True to avoid FileNotFoundError if file is already gone (e.g., in a deleted parent dir)
+        file_path.unlink(missing_ok=True)
         return True
     except Exception as e:
         print(f"Error deleting file {path}: {e}")
-        return False
+        raise  # exit the script early if an error occurs
 
 
 def _delete_folder(path: str) -> bool:
@@ -148,22 +152,18 @@ def _delete_folder(path: str) -> bool:
     """
     try:
         folder_path = Path(path)
-        if folder_path.exists() and folder_path.is_dir():  # Check before deleting
+        if (
+            folder_path.exists() and folder_path.is_dir()
+        ):  # Check before attempting to delete
             shutil.rmtree(folder_path)
             return True
         return False  # Folder didn't exist or wasn't a directory
-    except FileNotFoundError:  # Should be caught by exists() check, but for safety
-        print(f"Error: Directory {path} not found.")
-        return False
-    except PermissionError:
-        print(f"Error: Permission denied to delete {path}.")
-        return False
     except Exception as e:
         print(f"Error deleting folder {path}: {e}")
-        return False
+        raise  # exit the script early if an error occurs
 
 
-def _get_latest_kernel_version(boot_dir: Path) -> Path:
+def _get_latest_kernel_version(boot_dir: Path):
     kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
 
     pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
@@ -171,104 +171,94 @@ def _get_latest_kernel_version(boot_dir: Path) -> Path:
     def compare(left, right):
         ma_l = pa.match(Path(left).name)
         ma_r = pa.match(Path(right).name)
-        # Handle cases where regex might not match (though it should with glob pattern)
+
+        # Handle cases where regex might not match or if version parsing fails
+        # This prevents TypeError if 'version' group is missing or parsing fails
         if not ma_l or not ma_r:
             return 0  # Treat as equal if versions can't be parsed
-        ver_l = version.parse(ma_l["version"])
-        ver_r = version.parse(ma_r["version"])
-        return 1 if ver_l > ver_r else -1 if ver_l < ver_r else 0
 
-    # Ensure glob returns non-symlinks, as _list_non_latest_kernels expects that
+        try:  # Robustly parse versions
+            ver_l = version.parse(ma_l["version"])
+            ver_r = version.parse(ma_r["version"])
+        except ValueError:
+            # Handle cases where version.parse might fail, e.g., malformed version string
+            return 0
+
+        if ver_l > ver_r:
+            return 1
+        elif ver_l < ver_r:
+            return -1
+        else:  # Explicitly return 0 for equality
+            return 0
+
     kfile_glob = [f for f in glob.glob(kfiles_path) if not Path(f).is_symlink()]
-    if not kfile_glob:
-        raise Exception(f"No kernel files found in {boot_dir} matching pattern.")
     kfiles = sorted(kfile_glob, key=cmp_to_key(compare), reverse=True)
 
     return Path(kfiles[0])  # latest
 
 
-def _list_non_latest_kernels(boot_dir: Path) -> Set[Path]:
-    non_latest_kernels: Set[Path] = set()
-
+def _list_non_latest_kernels(boot_dir: Path):
     # if boot/extlinux/extlinux.conf exists, the kernel is specified in that file
-    # so we don't need to pickup the latest kernel, and thus, don't remove any.
+    # so we don't need to pickup the latest kernel.
     if (boot_dir / "extlinux" / "extlinux.conf").is_file():
-        return non_latest_kernels  # Return empty set, no kernels to delete
+        return []
+
+    kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
+    ifiles_path = str(boot_dir / "initrd.img-*.*.*-*-*")
+    sfiles_path = str(boot_dir / "System.map-*.*.*-*-*")
+    cfiles_path = str(boot_dir / "config-*.*.*-*-*")
+
+    kfile_glob = [f for f in glob.glob(kfiles_path) if not Path(f).is_symlink()]
+    ifile_glob = [f for f in glob.glob(ifiles_path) if not Path(f).is_symlink()]
+    sfile_glob = [f for f in glob.glob(sfiles_path) if not Path(f).is_symlink()]
+    cfile_glob = [f for f in glob.glob(cfiles_path) if not Path(f).is_symlink()]
 
     pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
 
+    # Use try-except for _get_latest_kernel_version call for robustness
     try:
-        vmlinuz_latest = _get_latest_kernel_version(boot_dir)
-        k_ma = pa.match(vmlinuz_latest.name)
-        if not k_ma:
-            raise Exception(
-                f"Could not parse version from latest kernel file: {vmlinuz_latest.name}"
-            )
-
-        ver = k_ma["version"]
-        suf = k_ma["suffix"]
-        initrd_img_latest = vmlinuz_latest.parent / f"initrd.img-{ver}{suf}"
-        system_map_latest = vmlinuz_latest.parent / f"System.map-{ver}{suf}"
-        config_latest = vmlinuz_latest.parent / f"config-{ver}{suf}"
-
-        # Collect all relevant files that are not symlinks
-        all_kernel_files = {
-            Path(f)
-            for f in glob.glob(str(boot_dir / "vmlinuz-*"))
-            if not Path(f).is_symlink()
-        }
-        all_initrd_files = {
-            Path(f)
-            for f in glob.glob(str(boot_dir / "initrd.img-*"))
-            if not Path(f).is_symlink()
-        }
-        all_system_map_files = {
-            Path(f)
-            for f in glob.glob(str(boot_dir / "System.map-*"))
-            if not Path(f).is_symlink()
-        }
-        all_config_files = {
-            Path(f)
-            for f in glob.glob(str(boot_dir / "config-*"))
-            if not Path(f).is_symlink()
-        }
-
-        if initrd_img_latest not in all_initrd_files:
-            raise Exception(
-                f"{initrd_img_latest} (initrd for latest kernel) doesn't exist."
-            )
-
-        # Add all currently found files to the set of non_latest_kernels
-        non_latest_kernels.update(all_kernel_files)
-        non_latest_kernels.update(all_initrd_files)
-        non_latest_kernels.update(all_system_map_files)
-        non_latest_kernels.update(all_config_files)
-
-        # Remove the latest kernel's components from the set
-        non_latest_kernels.discard(vmlinuz_latest)
-        non_latest_kernels.discard(initrd_img_latest)
-        non_latest_kernels.discard(system_map_latest)  # Optional, may not exist
-        non_latest_kernels.discard(config_latest)  # Optional, may not exist
-
+        vmlinuz = _get_latest_kernel_version(boot_dir)
     except Exception as e:
         print(
-            f"Warning: Could not determine non-latest kernels due to error: {e}. Skipping kernel exclusion."
+            f"Warning: Could not determine latest kernel in {boot_dir} due to {e}. Skipping non-latest kernel listing."
         )
-        return set()  # Return empty set if an error occurs
+        return []  # Return empty list if latest kernel cannot be determined
 
-    return non_latest_kernels
+    k_ma = pa.match(vmlinuz.name)
+    ver = k_ma["version"]  # type: ignore
+    suf = k_ma["suffix"]  # type: ignore
+    initrd_img = vmlinuz.parent / f"initrd.img-{ver}{suf}"
+    system_map = vmlinuz.parent / f"System.map-{ver}{suf}"
+    config = vmlinuz.parent / f"config-{ver}{suf}"
+
+    if str(initrd_img) not in ifile_glob:  # initrd.img-{ver}{suf} must exist.
+        raise Exception(f"{initrd_img} doesn't exist.")
+
+    # Remove the latest kernel's files
+    if str(vmlinuz) in kfile_glob:  # Check if exists before removing
+        kfile_glob.remove(str(vmlinuz))
+    if str(initrd_img) in ifile_glob:  # Check if exists before removing
+        ifile_glob.remove(str(initrd_img))
+    try:
+        if str(system_map) in sfile_glob:  # Check if exists before removing
+            sfile_glob.remove(str(system_map))  # system_map is optional
+        if str(config) in cfile_glob:  # Check if exists before removing
+            cfile_glob.remove(str(config))  # config is optional
+    except ValueError:  # Keep original exception handling
+        pass
+    return kfile_glob + ifile_glob + sfile_glob + cfile_glob
 
 
 def gen_metadata(
-    target_dir: str,
-    compressed_dir: Optional[str],
-    prefix: str,
-    output_dir: str,
-    directory_file: str,
-    symlink_file: str,
-    regular_file: str,
-    total_regular_size_file: str,
-    ignore_file: str,
+    target_dir,
+    compressed_dir,
+    prefix,
+    output_dir,
+    directory_file,
+    symlink_file,
+    regular_file,
+    total_regular_size_file,
+    ignore_file,
     *,
     cmpr_ratio: float,
     filesize_threshold: int,
@@ -290,6 +280,14 @@ def gen_metadata(
         re.compile(r"home/autoware/[^/]+/build"),
         re.compile(r"home/autoware/[^/]+/src"),
     ]
+
+    # This is the flag to control if we will check and add files back to "build" and "src" folder
+    check_symlink = any(
+        _pattern.search(str(_rule))
+        for _rule in ignore.rules
+        for _pattern in check_patterns
+    )
+
     # Special Patterns that we need to check and add files.
     build_folder_patterns = [
         re.compile(r"home/autoware/[^/]*/build/.*/hook/.*"),
@@ -297,137 +295,105 @@ def gen_metadata(
         re.compile(r"home/autoware/[^/]*/build/.*/.*.so$"),
     ]
 
-    # Determine if special symlink checking logic for 'build'/'src' is needed
-    # To limit the effect on existing customers
-    # We check if any of the ignore rules match the special patterns.
-    # i.e.
-    #     1, "home/autoware/*/build"
-    #     2, "home/autoware/*/src"
-    check_symlink_special_case = any(
-        _pattern.search(str(_rule))
-        for _rule in ignore.rules
-        for _pattern in check_patterns
-    )
-
-    # Sets to collect paths for metadata (what we keep)
-    metadata_dirs: Set[Path] = set()
-    metadata_symlinks: Set[Path] = set()
-    metadata_regulars: Set[Path] = set()
-
-    # Set to store absolute paths for deletion candidates
+    # Store paths for deletion, and for metadata generation
     paths_to_delete_abs: Set[Path] = set()
+    metadata_symlinks: List[Path] = []  # Symlinks to collect for metadata
+    metadata_dirs: List[Path] = []  # Directories to collect for metadata
+    metadata_regulars: List[Path] = []  # Regular files to collect for metadata
 
-    # Identify non-latest kernels (absolute paths)
-    non_latest_kernels_abs = _list_non_latest_kernels(p / "boot")
-    # --- DEBUG PRINT ---
-    print(
-        f"\n--- DEBUG: Non-latest kernels identified by _list_non_latest_kernels: {non_latest_kernels_abs} ---"
-    )
-    # --- END DEBUG PRINT ---
+    additional_regular_set = set()
+    additional_dir_set = set()
 
-    # First Pass: Categorize and identify initial deletion candidates
-    # We iterate all paths and decide if they should be in metadata or deleted.
-    for f_abs in p.glob("**/*"):
+    # remove kernels under /boot directory other than latest
+    # _list_non_latest_kernels returns a list of strings, convert to Path objects for comparisons
+    non_latest_kernels_str = _list_non_latest_kernels(p / "boot")
+    non_latest_kernels_abs: Set[Path] = {
+        Path(f_str) for f_str in non_latest_kernels_str
+    }  # Convert to Set of Paths
+
+    for f_abs in p.glob("**/*"):  # Iterate using Path objects
         try:
-            # Skip symlink loops and broken symlinks
+            # Skip broken symlinks from processing early
             if f_abs.is_symlink() and not f_abs.exists():
                 print(
-                    f"WARN: Broken symlink detected: {f_abs}. Skipping collection for metadata."
+                    f"WARN: Broken symlink detected: {f_abs}. Skipping metadata collection."
                 )
-                # We still keep track of it as an existing path if it's not removed by ignore rules
-                # This ensures it's not marked for deletion if it's the only thing in its parent dir.
-                continue
+                continue  # Skip this broken symlink from metadata and deletion consideration
 
-            f_rel = f_abs.relative_to(target_dir)
+            f_rel = f_abs.relative_to(target_dir)  # Path object for relative path
 
             is_ignored = ignore.match(
                 target_abs / str(f_rel)
             )  # Match using absolute path of relative
             is_symlink = f_abs.is_symlink()
-            is_non_latest_kernel = f_abs in non_latest_kernels_abs
+            is_non_latest_kernel = (
+                f_abs in non_latest_kernels_abs
+            )  # Check against Path objects
 
-            # --- DEBUG PRINTS START ---
-            if (
-                f_abs.parent.name == "boot"
-            ):  # Only print for files in the boot directory to keep output concise
-                print(f"\n--- Processing: {f_abs.name} ---")
-                print(
-                    f"  Is non-latest kernel (from _list_non_latest_kernels): {is_non_latest_kernel}"
-                )
-                print(f"  Is symlink: {is_symlink}")
-                print(f"  Is ignored: {is_ignored}")
-            # --- DEBUG PRINTS END ---
-
-            # Symlinks themselves are never deleted. They are always added to metadata for reconstruction.
+            # If it's a symlink, always collect it for metadata and ensure it's not marked for deletion
             if is_symlink:
-                metadata_symlinks.add(f_rel)
-                # --- DEBUG PRINT ---
-                if f_abs.parent.name == "boot":
-                    print(f"  SKIPPED FOR DELETION (is symlink): {f_abs.name}")
-                # --- END DEBUG PRINT ---
-                continue  # Skip to the next file, symlinks are handled in terms of deletion
+                metadata_symlinks.append(f_rel)
+                continue  # Symlinks are never deleted, move to next file
 
-            # --- Decision Logic for Files/Directories (non-symlinks) ---
+            # --- Determine if the file/directory should be deleted or included in metadata ---
             should_be_deleted = False
 
-            # Non-latest kernels (non-symlinks) are always marked for deletion
+            # Rule 1: Non-latest kernels are marked for deletion
             if is_non_latest_kernel:
                 should_be_deleted = True
+            # Rule 2: Ignored files/directories are marked for deletion, unless specially protected
             elif is_ignored:
-                # If ignored, check if it's a special case that should be kept despite ignore rules
-                should_be_kept_despite_ignore = False
-                if check_symlink_special_case:
-                    # Check if the path itself or its components are special 'autoware/build' or 'autoware/src' patterns
+                should_be_kept_despite_ignore_rule = False
+                if (
+                    check_symlink
+                ):  # check_symlink is true if "home/autoware/*/build" or "home/autoware/*/src" rules are present
+                    relative_path_str = str(f_rel)  # Use string for regex matching
                     is_in_special_autoware_pattern = any(
-                        pattern.search(str(f_rel)) for pattern in check_patterns
+                        pattern.search(relative_path_str) for pattern in check_patterns
                     )
 
                     if is_in_special_autoware_pattern:
                         if f_abs.is_dir():
-                            should_be_kept_despite_ignore = True
-                        elif f_abs.is_file():
-                            is_special_build_file_type = any(
-                                _file_pattern.search(str(f_rel))
-                                for _file_pattern in build_folder_patterns
-                            )
-                            if is_special_build_file_type:
-                                should_be_kept_despite_ignore = True
+                            should_be_kept_despite_ignore_rule = True
+                        elif f_abs.is_file() and any(
+                            _file_pattern.search(relative_path_str)
+                            for _file_pattern in build_folder_patterns
+                        ):
+                            should_be_kept_despite_ignore_rule = True
 
-                if not should_be_kept_despite_ignore:
+                if not should_be_kept_despite_ignore_rule:
                     should_be_deleted = True
 
             if should_be_deleted:
-                paths_to_delete_abs.add(f_abs)
-                # --- DEBUG PRINT ---
-                if f_abs.parent.name == "boot":
-                    print(f"  MARKED FOR DELETION: {f_abs.name}")
-                # --- END DEBUG PRINT ---
+                paths_to_delete_abs.add(f_abs)  # Mark for deletion
             else:
-                # If not marked for deletion, add to metadata lists
+                # Add to metadata lists if not marked for deletion
                 if f_abs.is_dir():
-                    metadata_dirs.add(f_rel)
+                    metadata_dirs.append(f_rel)
                 elif f_abs.is_file():
-                    metadata_regulars.add(f_rel)
+                    metadata_regulars.append(f_rel)
 
         except Exception as e:
             if str(e).startswith("Symlink loop from"):
                 print(f"WARN: {e}")
             else:
                 print(f"Error processing path {f_abs}: {e}. Skipping.")
-                continue  # Skip this file and continue with others
+            continue  # Continue loop even on error
 
-    # Second Pass: Process symlink targets for universal protection from deletion and metadata inclusion
-    # This ensures that any file/directory that is the target of a symlink (and exists)
-    # is NOT deleted, and its metadata is collected.
-    symlink_targets_for_metadata_and_protection: Set[Path] = set()
+        # SECOND PASS - Protect symlink targets from deletion and ensure they are in metadata
+        # This ensures files/directories that are targets of symlinks (and exist) are never deleted.
+    protected_by_symlink_targets: Set[
+        Path
+    ] = set()  # To store relative paths to add to metadata
+
     for (
         symlink_rel_path
     ) in (
         metadata_symlinks
-    ):  # Iterate through symlinks we've decided to keep in metadata
+    ):  # Use metadata_symlinks for symlinks that will be in manifest
         try:
             symlink_abs_path = p / symlink_rel_path
-            symlink_target_raw = os.readlink(str(symlink_abs_path))  # target as string
+            symlink_target_raw = os.readlink(str(symlink_abs_path))
 
             # Resolve the absolute path of the symlink target
             if Path(symlink_target_raw).is_absolute():
@@ -439,12 +405,11 @@ def gen_metadata(
                     symlink_abs_path.parent / symlink_target_raw
                 ).resolve()
 
-            # Only process if the target exists and is within the target_dir
+            # If the target exists and is within the target_dir, protect it and its parent directories
             if target_abs_path.exists() and target_abs_path.is_relative_to(target_abs):
                 target_rel_path = target_abs_path.relative_to(target_dir)
 
-                # Add the target and all its parent directories (up to target_dir) to be included in metadata
-                # and remove them from deletion candidates if they were previously marked for deletion.
+                # Add the target and its parents to the set of paths to be protected and included in metadata
                 parts = target_rel_path.parts
                 current_partial_path = Path()
                 for part in parts:
@@ -452,63 +417,64 @@ def gen_metadata(
                         current_partial_path /= part
                         abs_current_partial_path = p / current_partial_path
                         if abs_current_partial_path.is_symlink():
-                            # If a symlink is encountered in the path to target, stop adding parents
+                            # If a symlink is encountered on the path to target, stop.
+                            # The symlink itself is already handled in metadata_symlinks.
                             break
 
-                        # Add to metadata set (unconditionally, as it's part of a kept path)
-                        symlink_targets_for_metadata_and_protection.add(
-                            current_partial_path
-                        )
-
-                        # And, if this path (file or dir) was marked for deletion, remove it.
+                        protected_by_symlink_targets.add(current_partial_path)
+                        # Remove from deletion candidates if this path was previously marked
                         if abs_current_partial_path in paths_to_delete_abs:
                             paths_to_delete_abs.discard(abs_current_partial_path)
             else:
-                # Print info for symlinks pointing outside target_dir or to non-existent targets
                 print(
-                    f"INFO: Symlink {symlink_rel_path} targets outside {target_dir} or to non-existent target: {symlink_target_raw}. Not including target in metadata."
+                    f"INFO: Symlink {symlink_rel_path} targets outside {target_dir} or to non-existent target: {symlink_target_raw}. Not protecting target from deletion."
                 )
 
-        except (
-            OSError
-        ) as e:  # Handle broken symlinks or permission issues during readlink
-            # This case is now mostly handled by the initial `f_abs.is_symlink() and not f_abs.exists()` check.
-            # But this is here for safety if readlink still fails for other reasons.
+        except OSError as e:
             print(
-                f"WARN: Failed to read symlink target for {symlink_rel_path}: {e}. Skipping target processing."
+                f"WARN: Failed to read symlink target for {symlink_rel_path}: {e}. Skipping target protection."
             )
         except Exception as e:
             print(
-                f"Error processing symlink target for {symlink_rel_path}: {e}. Skipping."
+                f"Error processing symlink target for {symlink_rel_path}: {e}. Skipping protection."
             )
 
-    # Incorporate the symlink targets and their parent dirs into our main metadata lists
-    for p_rel in symlink_targets_for_metadata_and_protection:
-        p_abs = p / p_rel
-        if p_abs.is_dir():
-            metadata_dirs.add(p_rel)
-        elif p_abs.is_file():
-            metadata_regulars.add(p_rel)
+    # Consolidate 'additional' sets and 'protected by symlink' targets into main metadata lists
+    # Use sets for merging to handle duplicates, then convert back to sorted lists
+    final_dirs_set = set(metadata_dirs)
+    final_regulars_set = set(metadata_regulars)
 
-    # Finalize metadata lists (sorted lists from sets)
-    dirs_final = sorted(list(metadata_dirs))
-    symlinks_final = sorted(
+    # Add items from additional_sets (from check_symlink logic)
+    final_dirs_set.update(Path(d_str) for d_str in additional_dir_set)
+    final_regulars_set.update(Path(r_str) for r_str in additional_regular_set)
+
+    # Add items protected by symlink targets
+    for p_rel in protected_by_symlink_targets:
+        f_abs_check = p / p_rel  # Absolute path to check if it's a file or dir
+        if f_abs_check.is_dir():
+            final_dirs_set.add(p_rel)
+        elif f_abs_check.is_file():
+            final_regulars_set.add(p_rel)
+
+    # Convert sets back to sorted lists for final metadata output
+    dirs_for_metadata = sorted(list(final_dirs_set))
+    regulars_for_metadata = sorted(list(final_regulars_set))
+    symlinks_for_metadata = sorted(
         list(metadata_symlinks)
-    )  # Symlinks list already built and sorted
-    regulars_final = sorted(list(metadata_regulars))
+    )  # Already collected as Path objects
 
     # --- Perform Deletion ---
-    # Sort paths to delete in reverse order to ensure subdirectories are deleted before parent directories
-    # and files before their containing directories.
+    # Filter paths_to_delete_abs to ensure only existing files/folders are considered for deletion
+    # (some might have been removed if part of a parent that got deleted).
     files_to_delete = sorted(
         [x for x in paths_to_delete_abs if x.is_file()],
         key=lambda x: str(x),
-        reverse=True,
+        reverse=True,  # Delete files deeper in hierarchy first
     )
     folders_to_delete = sorted(
         [x for x in paths_to_delete_abs if x.is_dir()],
         key=lambda x: str(x),
-        reverse=True,
+        reverse=True,  # Delete subfolders before parent folders
     )
 
     print("\n--- Files and Folders to be Deleted ---")
@@ -527,7 +493,6 @@ def gen_metadata(
         print("No folders to delete.")
 
     print("\n--- Initiating Deletion Process ---")
-
     for file_path in files_to_delete:
         success = _delete_file(str(file_path))
         if success:
@@ -543,7 +508,6 @@ def gen_metadata(
             print(
                 f"  FAILED: {folder_path}"
             )  # _delete_folder already prints error details
-
     print("--- Deletion Process Complete ---")
 
     # --- Write Metadata Files ---
@@ -555,13 +519,12 @@ def gen_metadata(
     # ex: 0777,1000,1000,'path/to/link','path/to/target'
     # NOTE: mode is always 0777.
     symlink_list = []
-    for d in symlinks_final:
-        # Note: Broken symlinks are skipped from metadata collection in the first pass
-        # so `d` here should always be a valid symlink Path.
-        symlink_target_path = os.readlink(os.path.join(target_dir, str(d)))
+    for d_path in symlinks_for_metadata:  # Iterate over Path objects
+        # d_path is a Path object, but _path_stat and _encapsulate expect strings
+        symlink_target_path = os.readlink(os.path.join(target_dir, str(d_path)))
         symlink_entry = (
-            f"{_join_mode_uid_gid(target_dir, str(d))},"
-            f"{_encapsulate(str(d), prefix=prefix)},"
+            f"{_join_mode_uid_gid(target_dir, str(d_path))},"
+            f"{_encapsulate(str(d_path), prefix=prefix)},"
             f"{_encapsulate(symlink_target_path)}"
         )
         symlink_list.append(symlink_entry)
@@ -574,15 +537,16 @@ def gen_metadata(
     # ex: 0755,1000,1000,'path/to/dir'
     with open(os.path.join(output_dir, directory_file), "w") as _f:
         dirs_list = [
-            f"{_join_mode_uid_gid(target_dir, str(d))},{_encapsulate(str(d), prefix=prefix)}"
-            for d in dirs_final
+            f"{_join_mode_uid_gid(target_dir, str(d_path))},{_encapsulate(str(d_path), prefix=prefix)}"
+            # Path object to string
+            for d_path in dirs_for_metadata
         ]
         _f.writelines("\n".join(dirs_list))
 
     # compression with zstd
-    # store the compressed file with its original file's hash and .zstd ext as name,
-    # directly under the <compressed_dir>
-    cctx: Optional[zstandard.ZstdCompressor] = None
+    #   store the compressed file with its original file's hash and .zstd ext as name,
+    #   directly under the <compressed_dir>
+    cctx = None  # Initialize cctx to None
     if compressed_dir:
         os.makedirs(compressed_dir, exist_ok=True)
         cctx = zstandard.ZstdCompressor(
@@ -594,20 +558,24 @@ def gen_metadata(
     # mode,uid,gid,link number,sha256sum,'path/to/file',size,inode,[compress_alg]
     # ex: 0644,1000,1000,1,0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,'path/to/file',1234,12345678,[zst]
     total_regular_size = 0
+
     with open(os.path.join(output_dir, regular_file), "w") as _f:
+
         regular_list = []
-        for d in regulars_final:
-            full_file_path = p / d  # Use Path object for _file_sha256
-            size = full_file_path.stat().st_size
-            stat = full_file_path.stat()
+        for d_path in regulars_for_metadata:  # Iterate over Path objects
+            # Convert Path objects to strings for original functions
+            size = os.path.getsize(os.path.join(target_dir, str(d_path)))
+            stat = os.stat(os.path.join(target_dir, str(d_path)))
             nlink = stat.st_nlink
-            inode = str(stat.st_ino) if nlink > 1 else ""
-            sha256hash = _file_sha256(full_file_path)
+            inode = stat.st_ino if nlink > 1 else ""
+            sha256hash = _file_sha256(
+                os.path.join(target_dir, str(d_path))
+            )  # Path object to string
 
             # if compression is enabled, try to compress the file here
             compress_alg = ""
-            if compressed_dir and cctx:
-                src_f = str(full_file_path)
+            if compressed_dir and cctx:  # Check if cctx is not None
+                src_f = os.path.join(target_dir, str(d_path))
                 dst_f = os.path.join(
                     compressed_dir, f"{sha256hash}.{ZSTD_COMPRESSION_EXTENSION}"
                 )  # add zstd extension to filename
@@ -622,12 +590,12 @@ def gen_metadata(
                     compress_alg = ZSTD_COMPRESSION_EXTENSION
 
             regular_list.append(
-                f"{_join_mode_uid_gid(target_dir, str(d), nlink=True)},"
+                f"{_join_mode_uid_gid(target_dir, str(d_path), nlink=True)},"  # Path object to string
                 f"{sha256hash},"
-                f"{_encapsulate(str(d), prefix=prefix)},"
+                f"{_encapsulate(str(d_path), prefix=prefix)},"  # Path object to string
                 f"{size},"
                 f"{inode},"
-                f"{compress_alg}"
+                f"{compress_alg}"  # ensure the compress_alg is at the end
             )
             total_regular_size += size
         _f.writelines("\n".join(regular_list))
