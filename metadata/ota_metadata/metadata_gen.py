@@ -138,9 +138,7 @@ def _delete_folder(path: Path) -> bool:
     Returns True if the folder was deleted, False if exception occurred.
     """
     try:
-        if (
-            path.exists() and path.is_dir()
-        ):
+        if path.exists() and path.is_dir():
             shutil.rmtree(path)
             return True
         return False
@@ -165,6 +163,7 @@ def compare(left, right):
     ver_l = version.parse(ma_l["version"])
     ver_r = version.parse(ma_r["version"])
     return 1 if ver_l > ver_r else -1
+
 
 def _list_non_latest_kernels(boot_dir: Path):
     # if boot/extlinux/extlinux.conf exists, the kernel is specified in that file
@@ -281,7 +280,9 @@ def gen_metadata(
                 ignored_paths_to_delete_abs.add(Path(f).resolve())
                 continue
             if str(f) in non_latest_kernels:
-                print(f"INFO: {f} is not a latest kernel. Adding to delete list and continue processing.")
+                print(
+                    f"INFO: {f} is not a latest kernel. Adding to delete list and continue processing."
+                )
                 kernel_paths_to_delete_abs.add(Path(f).resolve())
                 continue
         except Exception as e:
