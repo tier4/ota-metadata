@@ -119,32 +119,37 @@ def ignore_rules(target_dir, ignore_file):
     return ignore_parser
 
 
-def _delete_file(path: Path) -> bool:
+def _delete_file_folder(path: Path) -> bool:
     """
-    Delete a file at the given path.
-    Returns True if the file was deleted, False if exception occurred.
+    Delete a file or folder at the given path.
+    If the path is a file, it will be deleted.
+    If the path is a directory, it will be deleted recursively.
+    If the path does not exist, it will return False.
+    If an error occurs during deletion, it will print the error and raise the exception.
     """
     try:
-        path.unlink(missing_ok=True)
-        return True
+        if not path.exists():
+            return False
+        elif path.is_file():
+            path.unlink(missing_ok=True)
+            return True
+        elif path.is_dir():
+            shutil.rmtree(path)
+            return True
+        return False
     except Exception as e:
         print(f"Error deleting file {path}: {e}")
         raise
 
 
-def _delete_folder(path: Path) -> bool:
+def _write_delete_list(deleted_set: set, output_file: Path):
     """
-    Delete a folder at the given path.
-    Returns True if the folder was deleted, False if exception occurred.
+    Write the paths in the set to the output file.
+    Each path will be written on a new line.
     """
-    try:
-        if path.exists() and path.is_dir():
-            shutil.rmtree(path)
-            return True
-        return False
-    except Exception as e:
-        print(f"Error deleting folder {path}: {e}")
-        raise
+    with open(output_file, "a") as f:
+        for deleted in sorted(deleted_set):
+            f.writelines(f"{deleted}\n")
 
 
 def _get_latest_kernel_version(boot_dir: Path):
@@ -319,7 +324,7 @@ def gen_metadata(
 
         # Do nothing if ignore file does not have the following paths defined
         # "home/autoware/*build" or "home/autoware/*/src" definition
-        if check_symlink is False:
+        if not check_symlink:
             continue
 
         # Check the symlink target file
@@ -445,6 +450,24 @@ def gen_metadata(
 
     with open(os.path.join(output_dir, total_regular_size_file), "w") as _f:
         _f.write(str(total_regular_size))
+
+    # delete old kernel files
+    for p in kernel_paths_to_delete_abs:
+        _delete_file_folder(p)
+    _write_delete_list(
+        kernel_paths_to_delete_abs, Path(output_dir) / "deleted_old_kernels.txt"
+    )
+
+    print(f"Completed deletion of old kernel files in boot directory.")
+
+    # delete ignored files
+    for p in ignored_paths_to_delete_abs:
+        _delete_file_folder(p)
+    _write_delete_list(
+        ignored_paths_to_delete_abs, Path(output_dir) / "deleted_ignore_files.txt"
+    )
+
+    print(f"Completed deletion of files in ignore_file.txt.")
 
 
 if __name__ == "__main__":
