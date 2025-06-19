@@ -19,6 +19,8 @@ import os
 import re
 import glob
 import argparse
+import shutil
+
 import zstandard
 import igittigitt
 from hashlib import sha256
@@ -109,31 +111,60 @@ def _join_mode_uid_gid(base, path, nlink=False):
 
 
 def ignore_rules(target_dir, ignore_file):
-    parser = igittigitt.IgnoreParser()
+    ignore_parser = igittigitt.IgnoreParser()
     with open(ignore_file) as f:
         for line in f:
             line = line.rstrip("\n")
-            parser.add_rule(line, base_path=target_dir)
-    return parser
+            ignore_parser.add_rule(line, base_path=target_dir)
+    return ignore_parser
+
+
+def _delete_file(path: Path) -> bool:
+    """
+    Delete a file at the given path.
+    Returns True if the file was deleted, False if exception occurred.
+    """
+    try:
+        path.unlink(missing_ok=True)
+        return True
+    except Exception as e:
+        print(f"Error deleting file {path}: {e}")
+        raise
+
+
+def _delete_folder(path: Path) -> bool:
+    """
+    Delete a folder at the given path.
+    Returns True if the folder was deleted, False if exception occurred.
+    """
+    try:
+        if (
+            path.exists() and path.is_dir()
+        ):
+            shutil.rmtree(path)
+            return True
+        return False
+    except Exception as e:
+        print(f"Error deleting folder {path}: {e}")
+        raise
 
 
 def _get_latest_kernel_version(boot_dir: Path):
     kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
-
-    pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
-
-    def compare(left, right):
-        ma_l = pa.match(Path(left).name)
-        ma_r = pa.match(Path(right).name)
-        ver_l = version.parse(ma_l["version"])
-        ver_r = version.parse(ma_r["version"])
-        return 1 if ver_l > ver_r else -1
 
     kfile_glob = [f for f in glob.glob(kfiles_path) if not Path(f).is_symlink()]
     kfiles = sorted(kfile_glob, key=cmp_to_key(compare), reverse=True)
 
     return Path(kfiles[0])  # latest
 
+
+def compare(left, right):
+    pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
+    ma_l = pa.match(Path(left).name)
+    ma_r = pa.match(Path(right).name)
+    ver_l = version.parse(ma_l["version"])
+    ver_r = version.parse(ma_r["version"])
+    return 1 if ver_l > ver_r else -1
 
 def _list_non_latest_kernels(boot_dir: Path):
     # if boot/extlinux/extlinux.conf exists, the kernel is specified in that file
@@ -223,6 +254,10 @@ def gen_metadata(
     additional_regular_set = set()
     additional_dir_set = set()
 
+    # to delete
+    kernel_paths_to_delete_abs = set()
+    ignored_paths_to_delete_abs = set()
+
     # remove kernels under /boot directory other than latest
     non_latest_kernels = _list_non_latest_kernels(p / "boot")
     dirs = []
@@ -243,9 +278,11 @@ def gen_metadata(
                             for _file_pattern in build_folder_patterns
                         ):
                             additional_regular_set.add(relative_path)
+                ignored_paths_to_delete_abs.add(Path(f).resolve())
                 continue
             if str(f) in non_latest_kernels:
-                print(f"INFO: {f} is not a latest kernel. skip.")
+                print(f"INFO: {f} is not a latest kernel. Adding to delete list and continue processing.")
+                kernel_paths_to_delete_abs.add(Path(f).resolve())
                 continue
         except Exception as e:
             if str(e).startswith("Symlink loop from"):
