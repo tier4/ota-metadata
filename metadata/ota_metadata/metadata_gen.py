@@ -114,20 +114,16 @@ def _join_mode_uid_gid(base, path, nlink=False):
 
 def ignore_rules(target_dir, ignore_file):
     ignore_parser = IgnoreParser()
-    try:  # Added try-except for robust handling of missing ignore file
+    try:
         with open(ignore_file) as f:
             for line in f:
                 line = line.rstrip("\n")
                 ignore_parser.add_rule(line, base_path=target_dir)
-    except FileNotFoundError:  # Log a warning instead of crashing
-        print(
-            f"Warning: Ignore file '{ignore_file}' not found. No files will be ignored based on rules."
-        )
-    except Exception as e:  # Catch other exceptions
+    except Exception as e:
         print(
             f"Error reading ignore file '{ignore_file}': {e}. No files will be ignored based on rules."
         )
-        raise  # Exit the script early if an error occurs
+        raise
     return ignore_parser
 
 
@@ -138,12 +134,11 @@ def _delete_file(path: str) -> bool:
     """
     try:
         file_path = Path(path)
-        # Use missing_ok=True to avoid FileNotFoundError if file is already gone (e.g., in a deleted parent dir)
         file_path.unlink(missing_ok=True)
         return True
     except Exception as e:
         print(f"Error deleting file {path}: {e}")
-        raise  # exit the script early if an error occurs
+        raise
 
 
 def _delete_folder(path: str) -> bool:
@@ -153,49 +148,31 @@ def _delete_folder(path: str) -> bool:
     """
     try:
         folder_path = Path(path)
-        if (
-            folder_path.exists() and folder_path.is_dir()
-        ):  # Check before attempting to delete
+        if folder_path.exists() and folder_path.is_dir():
             shutil.rmtree(folder_path)
             return True
-        return False  # Folder didn't exist or wasn't a directory
+        return False
     except Exception as e:
         print(f"Error deleting folder {path}: {e}")
-        raise  # exit the script early if an error occurs
+        raise
 
 
 def _get_latest_kernel_version(boot_dir: Path) -> Path:
     kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
 
-    pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
-
-    def compare(left, right):
-        ma_l = pa.match(Path(left).name)
-        ma_r = pa.match(Path(right).name)
-
-        # Handle cases where regex might not match or if version parsing fails
-        # This prevents TypeError if 'version' group is missing or parsing fails
-        if not ma_l or not ma_r:
-            return 0  # Treat as equal if versions can't be parsed
-
-        try:  # Robustly parse versions
-            ver_l = version.parse(ma_l["version"])
-            ver_r = version.parse(ma_r["version"])
-        except ValueError:
-            # Handle cases where version.parse might fail, e.g., malformed version string
-            return 0
-
-        if ver_l > ver_r:
-            return 1
-        elif ver_l < ver_r:
-            return -1
-        else:  # Explicitly return 0 for equality
-            return 0
-
     kfile_glob = [f for f in glob.glob(kfiles_path) if not Path(f).is_symlink()]
     kfiles = sorted(kfile_glob, key=cmp_to_key(compare), reverse=True)
 
     return Path(kfiles[0])  # latest
+
+
+def compare(left: str, right: str) -> int:
+    pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
+    ma_l = pa.match(Path(left).name)
+    ma_r = pa.match(Path(right).name)
+    ver_l = version.parse(ma_l["version"])
+    ver_r = version.parse(ma_r["version"])
+    return 1 if ver_l > ver_r else -1
 
 
 def _list_non_latest_kernels(boot_dir: Path) -> list[str]:
@@ -215,15 +192,7 @@ def _list_non_latest_kernels(boot_dir: Path) -> list[str]:
     cfile_glob = [f for f in glob.glob(cfiles_path) if not Path(f).is_symlink()]
 
     pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
-
-    # Use try-except for _get_latest_kernel_version call for robustness
-    try:
-        vmlinuz = _get_latest_kernel_version(boot_dir)
-    except Exception as e:
-        print(
-            f"Warning: Could not determine latest kernel in {boot_dir} due to {e}. Skipping non-latest kernel listing."
-        )
-        return []  # Return empty list if latest kernel cannot be determined
+    vmlinuz = _get_latest_kernel_version(boot_dir)
 
     k_ma = pa.match(vmlinuz.name)
     ver = k_ma["version"]  # type: ignore
@@ -235,17 +204,12 @@ def _list_non_latest_kernels(boot_dir: Path) -> list[str]:
     if str(initrd_img) not in ifile_glob:  # initrd.img-{ver}{suf} must exist.
         raise Exception(f"{initrd_img} doesn't exist.")
 
-    # Remove the latest kernel's files
-    if str(vmlinuz) in kfile_glob:  # Check if exists before removing
-        kfile_glob.remove(str(vmlinuz))
-    if str(initrd_img) in ifile_glob:  # Check if exists before removing
-        ifile_glob.remove(str(initrd_img))
+    kfile_glob.remove(str(vmlinuz))
+    ifile_glob.remove(str(initrd_img))
     try:
-        if str(system_map) in sfile_glob:  # Check if exists before removing
-            sfile_glob.remove(str(system_map))  # system_map is optional
-        if str(config) in cfile_glob:  # Check if exists before removing
-            cfile_glob.remove(str(config))  # config is optional
-    except ValueError:  # Keep original exception handling
+        sfile_glob.remove(str(system_map))  # system_map is optional
+        cfile_glob.remove(str(config))  # config is optional
+    except ValueError:
         pass
     return kfile_glob + ifile_glob + sfile_glob + cfile_glob
 
@@ -383,9 +347,9 @@ def gen_metadata(
 
         # SECOND PASS - Protect symlink targets from deletion and ensure they are in metadata
         # This ensures files/directories that are targets of symlinks (and exist) are never deleted.
-    protected_by_symlink_targets: Set[
-        Path
-    ] = set()  # To store relative paths to add to metadata
+    protected_by_symlink_targets: Set[Path] = (
+        set()
+    )  # To store relative paths to add to metadata
 
     for (
         symlink_rel_path
