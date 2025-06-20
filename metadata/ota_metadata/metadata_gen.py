@@ -142,16 +142,6 @@ def _delete_file_folder(path: Path) -> bool:
         raise
 
 
-def _write_delete_list(deleted_set: set, output_file: Path):
-    """
-    Write the paths in the set to the output file.
-    Each path will be written on a new line.
-    """
-    with open(output_file, "a") as f:
-        for deleted in sorted(deleted_set):
-            f.writelines(f"{deleted}\n")
-
-
 def _get_latest_kernel_version(boot_dir: Path):
     kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
 
