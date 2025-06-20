@@ -458,7 +458,7 @@ def gen_metadata(
         kernel_paths_to_delete_abs, Path(output_dir) / "deleted_old_kernels.txt"
     )
 
-    print(f"Completed deletion of old kernel files in boot directory.")
+    print("Completed deletion of old kernel files in boot directory.")
 
     # delete ignored files
     for p in ignored_paths_to_delete_abs:
@@ -467,7 +467,7 @@ def gen_metadata(
         ignored_paths_to_delete_abs, Path(output_dir) / "deleted_ignore_files.txt"
     )
 
-    print(f"Completed deletion of files in ignore_file.txt.")
+    print("Completed deletion of files in ignore_file.txt.")
 
 
 if __name__ == "__main__":

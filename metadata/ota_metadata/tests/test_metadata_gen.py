@@ -16,7 +16,6 @@ import metadata_gen
 import os
 
 from pytest_unordered import unordered
-from pathlib import Path
 
 
 def test_get_latest_kernel_version(tmp_path):
