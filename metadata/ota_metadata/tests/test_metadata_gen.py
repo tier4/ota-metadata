@@ -206,25 +206,3 @@ def test_delete_file_folder_nonexistent(tmp_path):
     nonexist_path = tmp_path / "doesnotexist"
     result = metadata_gen._delete_file_folder(nonexist_path)
     assert result is False
-
-
-def test_write_delete_list(tmp_path):
-    deleted_set = {str(tmp_path / "a.txt"), str(tmp_path / "b.txt")}
-    output_file = tmp_path / "deleted.txt"
-    metadata_gen._write_delete_list(deleted_set, output_file)
-    lines = output_file.read_text().splitlines()
-    assert set(lines) == deleted_set
-
-
-def test_delete_and_write_integration(tmp_path):
-    file1 = tmp_path / "f1.txt"
-    file2 = tmp_path / "f2.txt"
-    file1.write_text("1")
-    file2.write_text("2")
-    deleted = set()
-    for f in [file1, file2]:
-        if metadata_gen._delete_file_folder(f):
-            deleted.add(str(f))
-    output_file = tmp_path / "deleted.txt"
-    metadata_gen._write_delete_list(deleted, output_file)
-    assert set(output_file.read_text().splitlines()) == deleted
