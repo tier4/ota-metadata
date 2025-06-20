@@ -273,6 +273,8 @@ def gen_metadata(
                             additional_regular_set.add(relative_path)
                         else:
                             ignored_paths_to_delete_abs.add(Path(f).resolve())
+                    else:
+                        ignored_paths_to_delete_abs.add(Path(f).resolve())
                 continue
             if str(f) in non_latest_kernels:
                 print(f"INFO: {f} is not a latest kernel. skip.")
