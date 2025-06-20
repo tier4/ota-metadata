@@ -20,8 +20,6 @@ from pathlib import Path
 
 
 def test_get_latest_kernel_version(tmp_path):
-    import metadata_gen
-
     vmlinuzs = [
         "vmlinuz-5.15.0-27-generic",
         "vmlinuz-5.15.0-64-generic",
@@ -36,8 +34,6 @@ def test_get_latest_kernel_version(tmp_path):
 
 
 def test_list_non_latest_kernels(tmp_path):
-    import metadata_gen
-
     vmlinuzs = [
         "vmlinuz-5.15.0-27-generic",
         "vmlinuz-5.15.0-64-generic",  # latest kernel
@@ -73,8 +69,6 @@ def test_list_non_latest_kernels(tmp_path):
 
 
 def test_list_non_latest_kernels_empty(tmp_path):
-    import metadata_gen
-
     (tmp_path / "extlinux").mkdir()
     (tmp_path / "extlinux" / "extlinux.conf").write_text("")
 
@@ -83,9 +77,6 @@ def test_list_non_latest_kernels_empty(tmp_path):
 
 
 def test_gen_metadata_method(tmp_path):
-    import metadata_gen
-    import os
-
     vmlinuzs = [
         "vmlinuz-5.15.0-27-generic",
         "vmlinuz-5.15.0-64-generic",  # latest kernel
