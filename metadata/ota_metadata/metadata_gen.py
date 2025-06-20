@@ -259,7 +259,6 @@ def gen_metadata(
     additional_dir_set = set()
 
     # to delete
-    kernel_paths_to_delete_abs = set()
     ignored_paths_to_delete_abs = set()
 
     # remove kernels under /boot directory other than latest
@@ -285,10 +284,7 @@ def gen_metadata(
                 ignored_paths_to_delete_abs.add(Path(f).resolve())
                 continue
             if str(f) in non_latest_kernels:
-                print(
-                    f"INFO: {f} is not a latest kernel. Adding to delete list and continue processing."
-                )
-                kernel_paths_to_delete_abs.add(Path(f).resolve())
+                print(f"INFO: {f} is not a latest kernel. skip.")
                 continue
         except Exception as e:
             if str(e).startswith("Symlink loop from"):
