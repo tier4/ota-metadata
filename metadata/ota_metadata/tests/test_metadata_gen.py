@@ -12,7 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import metadata_gen
+import os
+
 from pytest_unordered import unordered
+from pathlib import Path
 
 
 def test_get_latest_kernel_version(tmp_path):
@@ -186,3 +190,93 @@ def test_gen_metadata_method(tmp_path):
         not str(os.path.relpath(src_file2, tmp_path))
         in (tmp_path / output_folder / regular_file).read_text()
     )
+    # Check deleted_old_kernels.txt
+    deleted_kernels_file = tmp_path / "deleted_old_kernels.txt"
+    with open(deleted_kernels_file) as f:
+        deleted_kernels = set(line.strip() for line in f if line.strip())
+
+    expected_kernel_deleted = {
+        str((tmp_path / "boot" / "vmlinuz-5.15.0-27-generic").resolve()),
+        str((tmp_path / "boot" / "vmlinuz-5.4.0-102-generic").resolve()),
+        str((tmp_path / "boot" / "vmlinuz-4.12.0-27-generic").resolve()),
+        str((tmp_path / "boot" / "initrd.img-5.15.0-65-generic").resolve()),
+        str((tmp_path / "boot" / "initrd.img-5.4.0-102-generic").resolve()),
+        str((tmp_path / "boot" / "initrd.img-4.12.0-27-generic").resolve()),
+    }
+    assert expected_kernel_deleted.issubset(deleted_kernels)
+
+    # Check deleted_ignore_files.txt
+    deleted_ignore_file = tmp_path / "deleted_ignore_files.txt"
+    with open(deleted_ignore_file) as f:
+        deleted_ignored = set(line.strip() for line in f if line.strip())
+
+    expected_ignored = {
+        str(
+            (
+                tmp_path / "home" / "autoware" / "autoware.proj" / "build" / "file_001"
+            ).resolve()
+        ),
+        str(
+            (
+                tmp_path / "home" / "autoware" / "autoware.proj" / "build" / "file_002"
+            ).resolve()
+        ),
+        str(
+            (
+                tmp_path / "home" / "autoware" / "autoware.proj" / "src" / "file_001"
+            ).resolve()
+        ),
+        str(
+            (
+                tmp_path / "home" / "autoware" / "autoware.proj" / "src" / "file_002"
+            ).resolve()
+        ),
+    }
+    assert expected_ignored.issubset(deleted_ignored)
+
+
+def test_delete_file_folder_file(tmp_path):
+    file_path = tmp_path / "testfile.txt"
+    file_path.write_text("data")
+    assert file_path.exists()
+    result = metadata_gen._delete_file_folder(file_path)
+    assert result is True
+    assert not file_path.exists()
+
+
+def test_delete_file_folder_directory(tmp_path):
+    dir_path = tmp_path / "testdir"
+    dir_path.mkdir()
+    (dir_path / "file.txt").write_text("data")
+    assert dir_path.exists()
+    result = metadata_gen._delete_file_folder(dir_path)
+    assert result is True
+    assert not dir_path.exists()
+
+
+def test_delete_file_folder_nonexistent(tmp_path):
+    nonexist_path = tmp_path / "doesnotexist"
+    result = metadata_gen._delete_file_folder(nonexist_path)
+    assert result is False
+
+
+def test_write_delete_list(tmp_path):
+    deleted_set = {str(tmp_path / "a.txt"), str(tmp_path / "b.txt")}
+    output_file = tmp_path / "deleted.txt"
+    metadata_gen._write_delete_list(deleted_set, output_file)
+    lines = output_file.read_text().splitlines()
+    assert set(lines) == deleted_set
+
+
+def test_delete_and_write_integration(tmp_path):
+    file1 = tmp_path / "f1.txt"
+    file2 = tmp_path / "f2.txt"
+    file1.write_text("1")
+    file2.write_text("2")
+    deleted = set()
+    for f in [file1, file2]:
+        if metadata_gen._delete_file_folder(f):
+            deleted.add(str(f))
+    output_file = tmp_path / "deleted.txt"
+    metadata_gen._write_delete_list(deleted, output_file)
+    assert set(output_file.read_text().splitlines()) == deleted
