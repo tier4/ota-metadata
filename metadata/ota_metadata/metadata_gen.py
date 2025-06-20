@@ -440,10 +440,12 @@ def gen_metadata(
     with open(os.path.join(output_dir, total_regular_size_file), "w") as _f:
         _f.write(str(total_regular_size))
 
-    # delete ignored files
-    for p in ignored_paths_to_delete_abs:
-        _delete_file_folder(p)
-    print("Completed deletion of files in ignore_file.txt.")
+    # probably not necessary to check again, but just in case
+    if check_symlink:
+        # delete ignored files
+        for p in ignored_paths_to_delete_abs:
+            _delete_file_folder(p)
+        print("Completed deletion of files in ignore_file.txt.")
 
 
 if __name__ == "__main__":
