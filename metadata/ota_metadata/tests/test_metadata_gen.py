@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import metadata_gen
 import os
 
@@ -180,49 +181,6 @@ def test_gen_metadata_method(tmp_path):
         not str(os.path.relpath(src_file2, tmp_path))
         in (tmp_path / output_folder / regular_file).read_text()
     )
-    # Check deleted_old_kernels.txt
-    deleted_kernels_file = tmp_path / "deleted_old_kernels.txt"
-    with open(deleted_kernels_file) as f:
-        deleted_kernels = set(line.strip() for line in f if line.strip())
-
-    expected_kernel_deleted = {
-        str((tmp_path / "boot" / "vmlinuz-5.15.0-27-generic").resolve()),
-        str((tmp_path / "boot" / "vmlinuz-5.4.0-102-generic").resolve()),
-        str((tmp_path / "boot" / "vmlinuz-4.12.0-27-generic").resolve()),
-        str((tmp_path / "boot" / "initrd.img-5.15.0-65-generic").resolve()),
-        str((tmp_path / "boot" / "initrd.img-5.4.0-102-generic").resolve()),
-        str((tmp_path / "boot" / "initrd.img-4.12.0-27-generic").resolve()),
-    }
-    assert expected_kernel_deleted.issubset(deleted_kernels)
-
-    # Check deleted_ignore_files.txt
-    deleted_ignore_file = tmp_path / "deleted_ignore_files.txt"
-    with open(deleted_ignore_file) as f:
-        deleted_ignored = set(line.strip() for line in f if line.strip())
-
-    expected_ignored = {
-        str(
-            (
-                tmp_path / "home" / "autoware" / "autoware.proj" / "build" / "file_001"
-            ).resolve()
-        ),
-        str(
-            (
-                tmp_path / "home" / "autoware" / "autoware.proj" / "build" / "file_002"
-            ).resolve()
-        ),
-        str(
-            (
-                tmp_path / "home" / "autoware" / "autoware.proj" / "src" / "file_001"
-            ).resolve()
-        ),
-        str(
-            (
-                tmp_path / "home" / "autoware" / "autoware.proj" / "src" / "file_002"
-            ).resolve()
-        ),
-    }
-    assert expected_ignored.issubset(deleted_ignored)
 
 
 def test_delete_file_folder_file(tmp_path):

@@ -156,12 +156,12 @@ def _get_latest_kernel_version(boot_dir: Path):
     kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
 
     kfile_glob = [f for f in glob.glob(kfiles_path) if not Path(f).is_symlink()]
-    kfiles = sorted(kfile_glob, key=cmp_to_key(compare), reverse=True)
+    kfiles = sorted(kfile_glob, key=cmp_to_key(_compare), reverse=True)
 
     return Path(kfiles[0])  # latest
 
 
-def compare(left, right):
+def _compare(left, right):
     pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
     ma_l = pa.match(Path(left).name)
     ma_r = pa.match(Path(right).name)
@@ -451,22 +451,9 @@ def gen_metadata(
     with open(os.path.join(output_dir, total_regular_size_file), "w") as _f:
         _f.write(str(total_regular_size))
 
-    # delete old kernel files
-    for p in kernel_paths_to_delete_abs:
-        _delete_file_folder(p)
-    _write_delete_list(
-        kernel_paths_to_delete_abs, Path(output_dir) / "deleted_old_kernels.txt"
-    )
-
-    print("Completed deletion of old kernel files in boot directory.")
-
     # delete ignored files
     for p in ignored_paths_to_delete_abs:
         _delete_file_folder(p)
-    _write_delete_list(
-        ignored_paths_to_delete_abs, Path(output_dir) / "deleted_ignore_files.txt"
-    )
-
     print("Completed deletion of files in ignore_file.txt.")
 
 
