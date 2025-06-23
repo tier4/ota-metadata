@@ -443,8 +443,8 @@ def gen_metadata(
     # probably not necessary to check again, but just in case
     if check_symlink:
         # delete ignored files
-        for p in ignored_paths_to_delete_abs:
-            _delete_file_folder(p)
+        for delete_path in ignored_paths_to_delete_abs:
+            _delete_file_folder(delete_path)
         print("Completed deletion of files in ignore_file.txt.")
 
 
