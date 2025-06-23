@@ -271,6 +271,8 @@ def gen_metadata(
                             for _file_pattern in build_folder_patterns
                         ):
                             additional_regular_set.add(relative_path)
+                        else:
+                            ignored_paths_to_delete_abs.add(Path(f).resolve())
                     else:
                         ignored_paths_to_delete_abs.add(Path(f).resolve())
                 continue
@@ -354,8 +356,6 @@ def gen_metadata(
                         additional_regular_set.add(
                             os.path.relpath(path_to_check, target_dir)
                         )
-                    else:
-                        ignored_paths_to_delete_abs.add(Path(path_to_check).resolve())
 
     with open(os.path.join(output_dir, symlink_file), "w") as _f:
         _f.writelines("\n".join(symlink_list))
