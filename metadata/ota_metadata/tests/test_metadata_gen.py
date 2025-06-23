@@ -15,6 +15,7 @@
 
 import metadata_gen
 import os
+import pytest
 
 from pytest_unordered import unordered
 
@@ -105,6 +106,11 @@ def test_gen_metadata_method(tmp_path):
     regular_file = "regulars.txt"
 
     ignore_patterns = [
+        "__pycache__/",
+        ".ssh/",
+        "/tmp",
+        "/home/autoware/*/log",
+        "/home/autoware/*/build",
         "home/autoware/autoware.proj/build",
         "home/autoware/autoware.proj/src",
     ]
@@ -124,14 +130,14 @@ def test_gen_metadata_method(tmp_path):
     (tmp_path / install_folder).mkdir()
 
     build_file1 = tmp_path / build_folder / "file_001"
-    build_file1.write_text("")
+    build_file1.write_text("build file 1")
     build_file2 = tmp_path / build_folder / "file_002"
-    build_file2.write_text("")
+    build_file2.write_text("build file 2")
 
     src_file1 = tmp_path / src_folder / "file_001"
-    src_file1.write_text("")
+    src_file1.write_text("src file 1")
     src_file2 = tmp_path / src_folder / "file_002"
-    src_file2.write_text("")
+    src_file2.write_text("src file 2")
 
     install_file1 = tmp_path / install_folder / "file_001"
     install_file2 = tmp_path / install_folder / "file_002"
@@ -206,3 +212,93 @@ def test_delete_file_folder_nonexistent(tmp_path):
     nonexist_path = tmp_path / "doesnotexist"
     result = metadata_gen._delete_file_folder(nonexist_path)
     assert result is False
+
+
+@pytest.mark.parametrize(
+    "case_path, is_symlink, symlink_target, expected_behavior",
+    [
+        # Case 1
+        ("/usr/lib/modules/5.19.0-50-generic/kernel/drivers/spi/spi-dw.ko", False, None, "keep"),
+        # Case 2
+        ("/opt/ota/client/venv/lib/python3.10/site-packages/zstandard/__pycache__/backend_cffi.cpython-310.pyc", False, None, "remove"),
+        # Case 3
+        ("/home/autoware/autoware.proj/src/autoware/autoware_utils/.git/hooks/pre-commit.sample", False, None, "remove"),
+        # Case 4
+        ("/home/autoware/autoware.proj/src/autoware/universe/system/autoware_velodyne_monitor/package.xml", True, "/some/target", "keep"),
+        # Case 5
+        ("/home/autoware/autoware.proj/src/simulator/scenario_simulator/docs/developer_guide/CONTRIBUTING.md", False, None, "keep"),
+        # Case 6
+        ("home/autoware/autoware.proj/src/simulator/scenario_simulator/CONTRIBUTING.md", True, "/some/target", "keep"),
+        # Case 7
+        ("/home/autoware/autoware.proj/build/openscenario_interpreter/colcon_build.rc", False, None, "remove"),
+        # Case 8
+        ("/home/autoware/autoware.proj/build/autoware_debug_tools/share/autoware_debug_tools/hook/pythonpath_develop.ps1", False, None, "keep"),
+        # Case 9
+        ("/home/autoware/autoware.proj/build/autoware_debug_tools/autoware_debug_tools.egg-info/PKG-INFO", False, None, "keep"),
+        # Case 10
+        ("/home/autoware/autoware.proj/build/traffic_simulator/libtraffic_simulator.so", False, None, "keep"),
+        # Case 11
+        ("/home/autoware/autoware.proj/build/llh_converter/ament_cmake_environment_hooks/ament_prefix_path.dsv", True, "/some/target", "keep"),
+        # Case 12
+        ("/home/autoware/autoware.proj/build/autoware_system_msgs/ament_cmake_python/autoware_system_msgs/autoware_system_msgs", False, None, "keep"),
+        # Case 13
+        ("/home/autoware/autoware.proj/build/autoware_system_msgs/ament_cmake_python/autoware_system_msgs/autoware_system_msgs", True, "/some/target", "keep"),
+    ]
+)
+def test_metadata_ignore_cases(tmp_path, case_path, is_symlink, symlink_target, expected_behavior):
+    # Setup ignore file
+    ignore_patterns = [
+        "__pycache__/",
+        ".ssh/",
+        "/boot/grub/",
+        "/boot/ota/",
+        "/boot/initrd.img-*.old-dkms",
+        "/boot/initrd.img.old",
+        "/boot/initrd.img",
+        "/boot/vmlinuz.old",
+        "/boot/vmlinuz",
+        "/tmp",
+        "home/autoware/*/build",
+        "home/autoware/*/src",
+        ]
+    ignore_file = tmp_path / "ignore.txt"
+    ignore_file.write_text("\n".join(ignore_patterns))
+
+    # Ensure boot directory and a vmlinuz file exist to avoid IndexError
+    boot_dir = tmp_path / "boot"
+    boot_dir.mkdir(exist_ok=True)
+    (boot_dir / "vmlinuz-5.15.0-64-generic").write_text("dummy")
+    (boot_dir / "initrd.img-5.15.0-64-generic").write_text("dummy")
+
+    # Create the file or symlink
+    file_path = tmp_path / case_path.lstrip("/")
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    if is_symlink:
+        target = symlink_target or (tmp_path / "target")
+        if not isinstance(target, str):
+            target = str(target)
+        os.symlink(target, file_path)
+    else:
+        file_path.write_text("dummy")
+
+    # Run metadata generation
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    metadata_gen.gen_metadata(
+        target_dir=str(tmp_path),
+        compressed_dir=str(tmp_path / "data.zst"),
+        prefix="/",
+        output_dir=str(output_dir),
+        directory_file="dirs.txt",
+        symlink_file="symlink.txt",
+        regular_file="regulars.txt",
+        total_regular_size_file="total_regular_size_.txt",
+        ignore_file=str(ignore_file),
+        cmpr_ratio=1.25,
+        filesize_threshold=16 * 1024,
+    )
+
+    if expected_behavior == "keep":
+        assert file_path.exists()
+    else:
+        assert not file_path.exists()
