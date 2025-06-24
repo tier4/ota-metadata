@@ -444,6 +444,7 @@ def gen_metadata(
     if check_symlink:
         # delete ignored files
         for delete_path in ignored_paths_to_delete_abs:
+            print(f"Deleting ignored file: {delete_path}")
             _delete_file_folder(delete_path)
         print("Completed deletion of files in ignore_file.txt.")
 
