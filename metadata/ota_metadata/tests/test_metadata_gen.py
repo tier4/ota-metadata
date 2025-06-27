@@ -350,7 +350,7 @@ def test_metadata_ignore_cases(
             "# Dummy File\n\nThis is a dummy markdown file for testing purposes.\n"
         )
     else:
-        file_path.write_text("dummy")
+        file_path.write_text("dummy 1")
     print("File path:", file_path)
     assert os.path.isfile(str(file_path))
     if is_a_symlink_target:
@@ -509,7 +509,7 @@ def test_metadata_ignore_cases_without_autoware_folder_specified(
             "# Dummy File\n\nThis is a dummy markdown file for testing purposes.\n"
         )
     else:
-        file_path.write_text("dummy")
+        file_path.write_text("dummy 2")
     if is_a_symlink_target:
         symlink_source_path = tmp_path / str(uuid.uuid4())
         symlink_source_path.parent.mkdir(parents=True, exist_ok=True)
