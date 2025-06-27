@@ -345,8 +345,7 @@ def test_metadata_ignore_cases(
     # Create the file first
     file_path = tmp_path / case_path.lstrip("/")
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    # Added to pass Markdown file linter
-    if str(file_path).endswith(".md"):
+    if file_path.suffix == ".md":
         file_path.write_text(
             "# Dummy File\n\nThis is a dummy markdown file for testing purposes.\n"
         )
@@ -505,7 +504,7 @@ def test_metadata_ignore_cases_without_autoware_folder_specified(
     file_path = tmp_path / case_path.lstrip("/")
     file_path.parent.mkdir(parents=True, exist_ok=True)
     # Added to pass Markdown file linter
-    if str(file_path).endswith(".md"):
+    if file_path.suffix == ".md":
         file_path.write_text(
             "# Dummy File\n\nThis is a dummy markdown file for testing purposes.\n"
         )
