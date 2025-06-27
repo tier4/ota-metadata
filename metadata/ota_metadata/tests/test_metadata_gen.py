@@ -504,7 +504,13 @@ def test_metadata_ignore_cases_without_autoware_folder_specified(
     # Create the file first
     file_path = tmp_path / case_path.lstrip("/")
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text("dummy")
+    # Added to pass Markdown file linter
+    if str(file_path).endswith(".md"):
+        file_path.write_text(
+            "# Dummy File\n\nThis is a dummy markdown file for testing purposes.\n"
+        )
+    else:
+        file_path.write_text("dummy")
     if is_a_symlink_target:
         symlink_source_path = tmp_path / str(uuid.uuid4())
         symlink_source_path.parent.mkdir(parents=True, exist_ok=True)
