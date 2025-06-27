@@ -131,9 +131,11 @@ def _delete_file_folder(path: Path) -> bool:
         if not path.exists():
             return False
         elif path.is_file():
+            print(f"Deleting file: {path}")
             path.unlink(missing_ok=True)
             return True
         elif path.is_dir():
+            print(f"Deleting directory: {path}")
             shutil.rmtree(path)
             return True
         return False
@@ -257,23 +259,40 @@ def gen_metadata(
     symlinks = []
     regulars = []
     for f in p.glob("**/*"):
+        print(f"Processing {f}")
         try:
             if ignore.match(target_abs / str(f.relative_to(target_dir))):
+                print(f"INFO: {f} is ignored by ignore file.")
                 if check_symlink:
                     relative_path = str(f.relative_to(target_dir))
                     if any(pattern.search(relative_path) for pattern in check_patterns):
                         if f.is_symlink():
+                            print(
+                                f"INFO: {f} is a symlink under build folder pattern. Add it back to symlinks."
+                            )
                             additional_symlink_set.add(relative_path)
                         elif f.is_dir():
+                            print(
+                                f"INFO: {f} is a directory under build folder pattern. Add it back to dirs."
+                            )
                             additional_dir_set.add(relative_path)
                         elif f.is_file() and any(
                             _file_pattern.search(relative_path)
                             for _file_pattern in build_folder_patterns
                         ):
+                            print(
+                                f"INFO: {f} is a file under build folder pattern. Add it back to regulars."
+                            )
                             additional_regular_set.add(relative_path)
                         else:
+                            print(
+                                f"INFO: {f} is ignored by ignore file. Add it to ignored_paths_to_delete_abs."
+                            )
                             ignored_paths_to_delete_abs.add(Path(f).resolve())
                     else:
+                        print(
+                            f"INFO: {f} is ignored by ignore file. Last Else. Add it to ignored_paths_to_delete_abs."
+                        )
                         ignored_paths_to_delete_abs.add(Path(f).resolve())
                 continue
             if str(f) in non_latest_kernels:
@@ -285,10 +304,13 @@ def gen_metadata(
             else:
                 raise
         if f.is_dir() and not f.is_symlink():
+            print(f"Added {f} to dirs.")
             dirs.append(str(f.relative_to(target_dir)))
         if f.is_symlink():
+            print(f"Added {f} to symlinks.")
             symlinks.append(str(f.relative_to(target_dir)))
         if f.is_file() and not f.is_symlink():
+            print(f"Added {f} to regulars.")
             regulars.append(str(f.relative_to(target_dir)))
 
     # symlinks.txt
@@ -302,8 +324,9 @@ def gen_metadata(
         symlinks.extend(additional_symlink_set)
 
     for d in symlinks:
-
+        print(f"Processing symlink: {d}")
         symlink_target_path = os.readlink(os.path.join(target_dir, d))
+        print(f"INFO: symlink_target_path 1: {symlink_target_path}")
         symlink_entry = (
             f"{_join_mode_uid_gid(target_dir, d)},"
             f"{_encapsulate(d, prefix=prefix)},"
@@ -337,9 +360,13 @@ def gen_metadata(
         # we need to check and add it back to regulars[] and dirs[]
         # Also, we need to the path level one by one.
         if ignore.match(Path(target_path_abs)):
+            print(f"target_path_abs: {target_path_abs}")
+            print(f"INFO: symlink_target_path: {symlink_target_path}")
             path_names = symlink_target_path.split(os.sep)
             path_to_check = target_dir
+
             for path_name in path_names:
+                print(f"INFO: Checking path_name: {path_name}")
                 if path_name:
                     path_to_check = os.path.join(path_to_check, path_name)
                     if os.path.islink(path_to_check):
@@ -347,12 +374,19 @@ def gen_metadata(
                         # we finish checking here.
                         # we don't need to add the symlink to symlinks[] list.
                         # it should already been added and we don't need to process symlinks[] recursively
+                        print(f"INFO: {path_to_check} is a symlink. Skip.")
                         break
                     elif os.path.isdir(path_to_check):
+                        print(
+                            f"INFO: {path_to_check} is a symlinked directory under build folder pattern. Add it back to dirs."
+                        )
                         additional_dir_set.add(
                             os.path.relpath(path_to_check, target_dir)
                         )
                     elif os.path.isfile(path_to_check):
+                        print(
+                            f"INFO: {path_to_check} is a symlinked file under build folder pattern. Add it back to regulars."
+                        )
                         additional_regular_set.add(
                             os.path.relpath(path_to_check, target_dir)
                         )
@@ -442,6 +476,23 @@ def gen_metadata(
 
     # probably not necessary to check again, but just in case
     if check_symlink:
+        for ignored_path in ignored_paths_to_delete_abs:
+            print(f"INFO: Checking ignored paths: {ignored_path}")
+        for regular in regulars:
+            print(f"INFO: Checking regular files: {regular}")
+            ignored_paths_to_delete_abs.discard(Path(regular).resolve())
+        for symlink in symlinks:
+            print(
+                f"INFO: Checking symlinks: {Path(os.path.join(target_dir, symlink)).resolve()}"
+            )
+            ignored_paths_to_delete_abs.discard(
+                Path(os.path.join(target_dir, symlink)).resolve()
+            )
+        for dir_path in dirs:
+            print(f"INFO: Checking directories: {dir_path}")
+        for ignored_path in ignored_paths_to_delete_abs:
+            print(f"INFO: Final ignored paths: {ignored_path}")
+
         # delete ignored files
         for delete_path in ignored_paths_to_delete_abs:
             print(f"Deleting ignored file: {delete_path}")
