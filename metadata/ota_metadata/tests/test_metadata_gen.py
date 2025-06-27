@@ -345,11 +345,13 @@ def test_metadata_ignore_cases(
     # Create the file first
     file_path = tmp_path / case_path.lstrip("/")
     file_path.parent.mkdir(parents=True, exist_ok=True)
+    # Added to pass Markdown file linter
     if str(file_path).endswith(".md"):
         file_path.write_text(
             "# Dummy File\n\nThis is a dummy markdown file for testing purposes.\n"
         )
-    file_path.write_text("dummy")
+    else:
+        file_path.write_text("dummy")
     print("File path:", file_path)
     assert os.path.isfile(str(file_path))
     if is_a_symlink_target:
