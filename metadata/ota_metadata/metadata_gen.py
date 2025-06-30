@@ -138,6 +138,7 @@ def _delete_file_folder(path: Path) -> bool:
             return True
         return False
     except Exception as e:
+        print(f"ERROR: Failed to delete {path}. Error: {e}")
         raise
 
 
