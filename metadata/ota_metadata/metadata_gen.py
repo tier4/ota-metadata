@@ -452,7 +452,6 @@ def gen_metadata(
         # delete ignored files
         for delete_path in ignored_paths_to_delete_abs:
             _delete_file_folder(delete_path)
-        print("Completed deletion of files in ignore_file.txt.")
 
 
 if __name__ == "__main__":
