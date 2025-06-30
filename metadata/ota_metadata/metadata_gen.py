@@ -20,6 +20,7 @@ import re
 import glob
 import argparse
 import shutil
+import time
 
 import zstandard
 import igittigitt
@@ -212,6 +213,7 @@ def gen_metadata(
     cmpr_ratio: float,
     filesize_threshold: int,
 ):
+    start = time.time()
     p = Path(target_dir)
     target_abs = Path(os.path.abspath(target_dir))
     ignore = ignore_rules(target_dir, ignore_file)
@@ -452,6 +454,11 @@ def gen_metadata(
         # delete ignored files
         for delete_path in ignored_paths_to_delete_abs:
             _delete_file_folder(delete_path)
+
+    # Calculate the end time and time taken
+    end = time.time()
+    length = end - start
+    print("It took", length, "seconds!")
 
 
 if __name__ == "__main__":
