@@ -445,11 +445,11 @@ def gen_metadata(
     # probably not necessary to check again, but just in case
     if check_symlink:
         for regular in regulars:
-            ignored_paths_to_delete_abs.discard(Path(regular).resolve())
+            regular_abs_path = Path(os.path.join(target_dir, regular)).resolve()
+            ignored_paths_to_delete_abs.discard(regular_abs_path)
         for symlink in symlinks:
-            ignored_paths_to_delete_abs.discard(
-                Path(os.path.join(target_dir, symlink)).resolve()
-            )
+            symlink_abs_path = Path(os.path.join(target_dir, symlink)).resolve()
+            ignored_paths_to_delete_abs.discard(symlink_abs_path)
 
         # delete ignored files
         for delete_path in ignored_paths_to_delete_abs:
