@@ -20,7 +20,6 @@ import re
 import glob
 import argparse
 import shutil
-import time
 
 import zstandard
 import igittigitt
@@ -236,7 +235,6 @@ def gen_metadata(
     cmpr_ratio: float,
     filesize_threshold: int,
 ):
-    start = time.time()
     p = Path(target_dir)
     target_abs = Path(os.path.abspath(target_dir))
     ignore = ignore_rules(target_dir, ignore_file)
