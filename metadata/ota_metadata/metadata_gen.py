@@ -143,6 +143,29 @@ def _delete_file_folder(path: Path) -> bool:
         raise
 
 
+def delete_empty_directories(root_dir):
+    """
+    Finds and deletes truly empty directories (no files or subdirectories)
+    recursively from the given root directory.
+
+    Args:
+        root_dir (str): The starting directory to clean up.
+    """
+    if not os.path.isdir(root_dir):
+        print(f"Error: '{root_dir}' is not a valid directory.")
+        return
+
+    print(f"Searching for and deleting empty directories under: {root_dir}")
+
+    for dir_path, dir_names, file_names in os.walk(root_dir, topdown=False):
+        try:
+            if not dir_names and not file_names:
+                os.rmdir(dir_path)
+        except Exception as e:
+            print(f"Could not delete '{dir_path}': {e}")
+            raise
+
+
 def _get_latest_kernel_version(boot_dir: Path):
     kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
 
@@ -455,10 +478,8 @@ def gen_metadata(
         for delete_path in ignored_paths_to_delete_abs:
             _delete_file_folder(delete_path)
 
-    # Calculate the end time and time taken
-    end = time.time()
-    length = end - start
-    print("It took", length, "seconds!")
+        # delete empty directories
+        delete_empty_directories(target_dir)
 
 
 if __name__ == "__main__":
