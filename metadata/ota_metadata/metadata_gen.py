@@ -19,6 +19,7 @@ import os
 import re
 import glob
 import argparse
+import time
 import zstandard
 import igittigitt
 from hashlib import sha256
@@ -187,6 +188,8 @@ def gen_metadata(
     cmpr_ratio: float,
     filesize_threshold: int,
 ):
+    start = time.time()
+
     p = Path(target_dir)
     target_abs = Path(os.path.abspath(target_dir))
     ignore = ignore_rules(target_dir, ignore_file)
@@ -407,6 +410,11 @@ def gen_metadata(
 
     with open(os.path.join(output_dir, total_regular_size_file), "w") as _f:
         _f.write(str(total_regular_size))
+
+    # Calculate the end time and time taken
+    end = time.time()
+    length = end - start
+    print("It took", length, "seconds!")
 
 
 if __name__ == "__main__":
