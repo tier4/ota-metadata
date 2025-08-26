@@ -31,23 +31,33 @@ from functools import cmp_to_key
 
 ZSTD_COMPRESSION_EXTENSION = "zst"
 ZSTD_COMPRESSION_LEVEL = 10
+ZSTD_HIGH_COMPRESSION_LEVEL = 19  # For large files
 ZSTD_MULTITHREADS = 2
 CHUNK_SIZE = 4 * (1024**2)  # 4MiB
 
 
 def zstd_compress_file(
     cctx: zstandard.ZstdCompressor,
+    large_cctx: zstandard.ZstdCompressor,
     src_fpath: str,
     dst_fpath: str,
     *,
     cmpr_ratio: float,
     filesize_threshold: int,
+    large_filesize_threshold: int,
 ) -> bool:
     if (src_size := os.path.getsize(src_fpath)) < filesize_threshold:
         return False  # skip file with too small size
+
+    # Select compression level based on file size
+    if src_size >= large_filesize_threshold:
+        adaptive_cctx = large_cctx
+    else:
+        adaptive_cctx = cctx
+
     # NOTE: interrupt the whole process if compression failed
     with open(src_fpath, "rb") as src_f, open(dst_fpath, "wb") as dst_f:
-        with cctx.stream_writer(dst_f, size=src_size) as compressor:
+        with adaptive_cctx.stream_writer(dst_f, size=src_size) as compressor:
             while data := src_f.read(CHUNK_SIZE):
                 compressor.write(data)
     # drop compressed file if cmpr ratio is too small or compressed failed
@@ -212,6 +222,7 @@ def gen_metadata(
     *,
     cmpr_ratio: float,
     filesize_threshold: int,
+    large_filesize_threshold: int,
 ):
     start = time.time()
     p = Path(target_dir)
@@ -394,6 +405,9 @@ def gen_metadata(
         cctx = zstandard.ZstdCompressor(
             level=ZSTD_COMPRESSION_LEVEL, threads=ZSTD_MULTITHREADS
         )
+        large_cctx = zstandard.ZstdCompressor(
+            level=ZSTD_HIGH_COMPRESSION_LEVEL, threads=ZSTD_MULTITHREADS
+        )
 
     # regulars.txt
     # format:
@@ -421,10 +435,12 @@ def gen_metadata(
                 # NOTE: skip already compressed file
                 if os.path.exists(dst_f) or zstd_compress_file(
                     cctx,  # type: ignore
+                    large_cctx,  # type: ignore
                     src_f,
                     dst_f,
                     cmpr_ratio=cmpr_ratio,
                     filesize_threshold=filesize_threshold,
+                    large_filesize_threshold=large_filesize_threshold,
                 ):
                     compress_alg = ZSTD_COMPRESSION_EXTENSION
 
@@ -481,6 +497,12 @@ if __name__ == "__main__":
         default=16 * 1024,  # 16KiB
         type=int,
     )
+    parser.add_argument(
+        "--compress-large-filesize",
+        help="lower bound size of file to be highly compressed",
+        default=8 * 1024 * 1024,  # 8MiB
+        type=int,
+    )
     parser.add_argument("--prefix", help="file name prefix.", default="/")
     parser.add_argument("--output-dir", help="metadata output directory.", default=".")
     parser.add_argument(
@@ -515,4 +537,5 @@ if __name__ == "__main__":
         ignore_file=args.ignore_file,
         cmpr_ratio=args.compress_ratio,
         filesize_threshold=args.compress_filesize,
+        large_filesize_threshold=args.compress_large_filesize,
     )

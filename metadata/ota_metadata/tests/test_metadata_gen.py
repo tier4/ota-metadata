@@ -161,6 +161,7 @@ def test_gen_metadata_method(tmp_path):
         ignore_file=str(tmp_path) + "/ignore_file.txt",
         cmpr_ratio=1.25,
         filesize_threshold=16 * 1024,
+        large_filesize_threshold=8 * 1024 * 1024,
     )
 
     assert (
@@ -186,8 +187,7 @@ def test_gen_metadata_method(tmp_path):
         in (tmp_path / output_folder / regular_file).read_text()
     )
     assert (
-        not str(os.path.relpath(src_file2, tmp_path))
-        in (tmp_path / output_folder / regular_file).read_text()
+        str(os.path.relpath(src_file2, tmp_path)) not in (tmp_path / output_folder / regular_file).read_text()
     )
 
 
@@ -378,6 +378,7 @@ def test_metadata_ignore_cases(
         ignore_file=str(ignore_file),
         cmpr_ratio=1.25,
         filesize_threshold=16 * 1024,
+        large_filesize_threshold=8 * 1024 * 1024,
     )
 
     if should_be_deleted:
@@ -527,6 +528,7 @@ def test_metadata_ignore_cases_without_autoware_folder_specified(
         ignore_file=str(ignore_file),
         cmpr_ratio=1.25,
         filesize_threshold=16 * 1024,
+        large_filesize_threshold=8 * 1024 * 1024
     )
 
     if should_be_deleted:
