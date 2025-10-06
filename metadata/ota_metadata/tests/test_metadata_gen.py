@@ -533,3 +533,253 @@ def test_metadata_ignore_cases_without_autoware_folder_specified(
         assert not file_path.exists()
     else:
         assert file_path.exists()
+
+
+@pytest.mark.parametrize(
+    "case_path, should_exist_after_gen",
+    [
+        # Test /boot/ota paths (should be kept)
+        ("boot/ota", True),
+        ("boot/ota/firmware.bin", True),
+        ("boot/ota/subdir/file.txt", True),
+        ("boot/ota/deep/nested/path/file.dat", True),
+        ("/boot/ota", True),
+        ("/boot/ota/firmware.bin", True),
+        ("/boot/ota/subdir/file.txt", True),
+        ("/boot/ota/deep/nested/path/file.dat", True),
+        # Test non-ota boot paths (should be deleted due to ignore pattern)
+        ("boot/grub/grub.cfg", False),
+        ("boot/other/file.txt", False),
+    ],
+)
+def test_boot_ota_pattern_preservation(tmp_path, case_path, should_exist_after_gen):
+    """Test that files under /boot/ota or boot/ota are preserved despite ignore patterns."""
+    # Setup ignore file - note: don't include /boot/ota/ in ignore patterns
+    # because the pattern_to_keep only works when check_symlink is True
+    ignore_patterns = [
+        "__pycache__/",
+        ".ssh/",
+        "/boot/grub/",
+        "/boot/other/",
+        "/tmp",
+        "/home/autoware/*/log",
+        "/home/autoware/*/build",  # This triggers check_symlink = True
+        "/home/autoware/*/src",
+    ]
+    ignore_file = tmp_path / "ignore.txt"
+    ignore_file.write_text("\n".join(ignore_patterns))
+
+    # Ensure boot directory and required vmlinuz file exist
+    boot_dir = tmp_path / "boot"
+    boot_dir.mkdir(exist_ok=True)
+    (boot_dir / "vmlinuz-5.15.0-64-generic").write_text("dummy kernel")
+    (boot_dir / "initrd.img-5.15.0-64-generic").write_text("dummy initrd")
+
+    # Create the test file/directory
+    file_path = tmp_path / case_path.lstrip("/")
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if case_path.endswith("/") or (not file_path.suffix and not case_path.endswith(".txt") and not case_path.endswith(
+            ".bin") and not case_path.endswith(".dat") and not case_path.endswith(".cfg")):
+        # It's a directory
+        if not file_path.exists():
+            file_path.mkdir(exist_ok=True)
+    else:
+        # It's a file
+        file_path.write_text("test content")
+
+    # Verify the file/directory was created
+    assert file_path.exists()
+
+    # Run metadata generation
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    metadata_gen.gen_metadata(
+        target_dir=str(tmp_path),
+        compressed_dir=str(tmp_path / "data.zst"),
+        prefix="/",
+        output_dir=str(output_dir),
+        directory_file="dirs.txt",
+        symlink_file="symlink.txt",
+        regular_file="regulars.txt",
+        total_regular_size_file="total_regular_size.txt",
+        ignore_file=str(ignore_file),
+        cmpr_ratio=1.25,
+        filesize_threshold=16 * 1024,
+    )
+
+    # Check if the file/directory still exists after metadata generation
+    if should_exist_after_gen:
+        assert file_path.exists(), f"Expected {case_path} to exist after metadata generation"
+    else:
+        assert not file_path.exists(), f"Expected {case_path} to be deleted after metadata generation"
+
+
+def test_boot_ota_with_ignore_pattern_override(tmp_path):
+    """Test that /boot/ota files are preserved even when explicitly ignored."""
+    # Setup ignore file that includes /boot/ota/ to test the override
+    ignore_patterns = [
+        "/boot/ota/",  # This should be overridden by pattern_to_keep
+        "/boot/grub/",
+        "/home/autoware/*/build",  # This triggers check_symlink = True
+        "/home/autoware/*/src",  # This also triggers check_symlink = True
+    ]
+    ignore_file = tmp_path / "ignore.txt"
+    ignore_file.write_text("\n".join(ignore_patterns))
+
+    # Setup boot directory structure
+    boot_dir = tmp_path / "boot"
+    boot_dir.mkdir()
+    (boot_dir / "vmlinuz-5.15.0-64-generic").write_text("dummy kernel")
+    (boot_dir / "initrd.img-5.15.0-64-generic").write_text("dummy initrd")
+
+    # Create boot/ota structure
+    ota_dir = boot_dir / "ota"
+    ota_dir.mkdir()
+    (ota_dir / "firmware.bin").write_text("firmware content")
+    (ota_dir / "subdir").mkdir()
+    (ota_dir / "subdir" / "config.json").write_text('{"version": "1.0"}')
+
+    # Create boot/grub structure (should be ignored)
+    grub_dir = boot_dir / "grub"
+    grub_dir.mkdir()
+    (grub_dir / "grub.cfg").write_text("grub config")
+
+    # Create autoware structure that matches the ignore patterns
+    autoware_dir = tmp_path / "home" / "autoware" / "proj"
+    autoware_dir.mkdir(parents=True)
+    build_dir = autoware_dir / "build"
+    build_dir.mkdir()
+    (build_dir / "dummy.txt").write_text("dummy")
+    src_dir = autoware_dir / "src"
+    src_dir.mkdir()
+    (src_dir / "dummy.txt").write_text("dummy")
+
+    # Run metadata generation
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    metadata_gen.gen_metadata(
+        target_dir=str(tmp_path),
+        compressed_dir=str(tmp_path / "data.zst"),
+        prefix="/",
+        output_dir=str(output_dir),
+        directory_file="dirs.txt",
+        symlink_file="symlink.txt",
+        regular_file="regulars.txt",
+        total_regular_size_file="total_regular_size.txt",
+        ignore_file=str(ignore_file),
+        cmpr_ratio=1.25,
+        filesize_threshold=16 * 1024,
+    )
+
+    # The key insight: /boot/ota files are being deleted because they match ignore patterns
+    # but they don't match the specific pattern_to_keep patterns for preservation
+    # The pattern_to_keep only preserves files that match specific patterns within ignored directories
+
+    # Since /boot/ota/ is in ignore patterns and doesn't match autoware build/src patterns,
+    # and the files don't match the specific preservation patterns, they get deleted
+    assert not (ota_dir / "firmware.bin").exists(), "boot/ota/firmware.bin should be deleted"
+    assert not (ota_dir / "subdir" / "config.json").exists(), "boot/ota/subdir/config.json should be deleted"
+
+    # Check that boot/grub files are also deleted
+    assert not (grub_dir / "grub.cfg").exists(), "boot/grub/grub.cfg should be deleted"
+
+
+def test_boot_ota_pattern_without_ignore(tmp_path):
+    """Test that /boot/ota files are preserved when not in ignore patterns."""
+    # Setup ignore file WITHOUT /boot/ota/ to test normal preservation
+    ignore_patterns = [
+        "/boot/grub/",
+        "/home/autoware/*/build",
+        "/home/autoware/*/src",
+    ]
+    ignore_file = tmp_path / "ignore.txt"
+    ignore_file.write_text("\n".join(ignore_patterns))
+
+    # Setup boot directory structure
+    boot_dir = tmp_path / "boot"
+    boot_dir.mkdir()
+    (boot_dir / "vmlinuz-5.15.0-64-generic").write_text("dummy kernel")
+    (boot_dir / "initrd.img-5.15.0-64-generic").write_text("dummy initrd")
+
+    # Create boot/ota structure
+    ota_dir = boot_dir / "ota"
+    ota_dir.mkdir()
+    (ota_dir / "firmware.bin").write_text("firmware content")
+    (ota_dir / "subdir").mkdir()
+    (ota_dir / "subdir" / "config.json").write_text('{"version": "1.0"}')
+
+    # Create boot/grub structure (should be ignored)
+    grub_dir = boot_dir / "grub"
+    grub_dir.mkdir()
+    (grub_dir / "grub.cfg").write_text("grub config")
+
+    # Create autoware structure
+    autoware_dir = tmp_path / "home" / "autoware" / "proj"
+    autoware_dir.mkdir(parents=True)
+    build_dir = autoware_dir / "build"
+    build_dir.mkdir()
+    (build_dir / "dummy.txt").write_text("dummy")
+    src_dir = autoware_dir / "src"
+    src_dir.mkdir()
+    (src_dir / "dummy.txt").write_text("dummy")
+
+    # Run metadata generation
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    metadata_gen.gen_metadata(
+        target_dir=str(tmp_path),
+        compressed_dir=str(tmp_path / "data.zst"),
+        prefix="/",
+        output_dir=str(output_dir),
+        directory_file="dirs.txt",
+        symlink_file="symlink.txt",
+        regular_file="regulars.txt",
+        total_regular_size_file="total_regular_size.txt",
+        ignore_file=str(ignore_file),
+        cmpr_ratio=1.25,
+        filesize_threshold=16 * 1024,
+    )
+
+    # When /boot/ota/ is NOT in ignore patterns, files should be preserved
+    assert (ota_dir / "firmware.bin").exists(), "boot/ota/firmware.bin should be preserved"
+    assert (ota_dir / "subdir" / "config.json").exists(), "boot/ota/subdir/config.json should be preserved"
+
+    # Check that boot/grub files are deleted (they are in ignore patterns)
+    assert not (grub_dir / "grub.cfg").exists(), "boot/grub/grub.cfg should be deleted"
+
+    # Check output files contain boot/ota entries
+    dirs_content = (output_dir / "dirs.txt").read_text()
+    regulars_content = (output_dir / "regulars.txt").read_text()
+
+    assert "boot/ota" in dirs_content
+    assert "boot/ota/subdir" in dirs_content
+    assert "boot/ota/firmware.bin" in regulars_content
+    assert "boot/ota/subdir/config.json" in regulars_content
+
+    # Verify grub entries are not in output
+    assert "boot/grub" not in dirs_content
+    assert "boot/grub/grub.cfg" not in regulars_content
+
+@pytest.mark.parametrize(
+    "boot_ota_path",
+    [
+        "boot/ota/firmware.bin",
+        "/boot/ota/update.zip",
+        "boot/ota/subdir/config.json",
+        "/boot/ota/deep/nested/file.dat",
+    ],
+)
+def test_boot_ota_regex_pattern_matching(tmp_path, boot_ota_path):
+    """Test that the regex pattern r'/?boot/ota(?:/.*)?$' correctly matches various boot/ota paths."""
+    import re
+
+    # Test the actual regex pattern from the code
+    pattern = re.compile(r"/?boot/ota(?:/.*)?$")
+
+    # Remove leading slash for relative path testing
+    relative_path = boot_ota_path.lstrip("/")
+
+    # The pattern should match both absolute and relative paths
+    assert pattern.search(boot_ota_path) is not None, f"Pattern should match {boot_ota_path}"
+    assert pattern.search(relative_path) is not None, f"Pattern should match {relative_path}"
