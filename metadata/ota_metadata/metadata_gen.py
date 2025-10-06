@@ -240,10 +240,11 @@ def gen_metadata(
     )
 
     # Special Patterns that we need to check and add files.
-    build_folder_patterns = [
+    pattern_to_keep = [
         re.compile(r"home/autoware/[^/]*/build/.*/hook/.*"),
         re.compile(r"home/autoware/[^/]*/build/.*/.*.egg-info/.*"),
         re.compile(r"home/autoware/[^/]*/build/.*/.*.so$"),
+        re.compile(r"/?boot/ota(?:/.*)?$"),
     ]
 
     additional_symlink_set = set()
@@ -270,7 +271,7 @@ def gen_metadata(
                             additional_dir_set.add(relative_path)
                         elif f.is_file() and any(
                             _file_pattern.search(relative_path)
-                            for _file_pattern in build_folder_patterns
+                            for _file_pattern in pattern_to_keep
                         ):
                             additional_regular_set.add(relative_path)
                         else:
