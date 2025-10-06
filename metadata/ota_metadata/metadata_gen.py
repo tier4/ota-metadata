@@ -244,7 +244,7 @@ def gen_metadata(
         re.compile(r"home/autoware/[^/]*/build/.*/hook/.*"),
         re.compile(r"home/autoware/[^/]*/build/.*/.*.egg-info/.*"),
         re.compile(r"home/autoware/[^/]*/build/.*/.*.so$"),
-        re.compile(r"/?boot/ota(?:/.*)?$")
+        re.compile(r"/?boot/ota(?:/.*)?$"),
     ]
 
     additional_symlink_set = set()

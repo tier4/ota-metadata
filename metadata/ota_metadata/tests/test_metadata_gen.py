@@ -579,8 +579,13 @@ def test_boot_ota_pattern_preservation(tmp_path, case_path, should_exist_after_g
     file_path = tmp_path / case_path.lstrip("/")
     file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if case_path.endswith("/") or (not file_path.suffix and not case_path.endswith(".txt") and not case_path.endswith(
-            ".bin") and not case_path.endswith(".dat") and not case_path.endswith(".cfg")):
+    if case_path.endswith("/") or (
+        not file_path.suffix
+        and not case_path.endswith(".txt")
+        and not case_path.endswith(".bin")
+        and not case_path.endswith(".dat")
+        and not case_path.endswith(".cfg")
+    ):
         # It's a directory
         if not file_path.exists():
             file_path.mkdir(exist_ok=True)
@@ -610,9 +615,13 @@ def test_boot_ota_pattern_preservation(tmp_path, case_path, should_exist_after_g
 
     # Check if the file/directory still exists after metadata generation
     if should_exist_after_gen:
-        assert file_path.exists(), f"Expected {case_path} to exist after metadata generation"
+        assert (
+            file_path.exists()
+        ), f"Expected {case_path} to exist after metadata generation"
     else:
-        assert not file_path.exists(), f"Expected {case_path} to be deleted after metadata generation"
+        assert (
+            not file_path.exists()
+        ), f"Expected {case_path} to be deleted after metadata generation"
 
 
 def test_boot_ota_with_ignore_pattern_override(tmp_path):
@@ -678,8 +687,12 @@ def test_boot_ota_with_ignore_pattern_override(tmp_path):
 
     # Since /boot/ota/ is in ignore patterns and doesn't match autoware build/src patterns,
     # and the files don't match the specific preservation patterns, they get deleted
-    assert not (ota_dir / "firmware.bin").exists(), "boot/ota/firmware.bin should be deleted"
-    assert not (ota_dir / "subdir" / "config.json").exists(), "boot/ota/subdir/config.json should be deleted"
+    assert not (
+        ota_dir / "firmware.bin"
+    ).exists(), "boot/ota/firmware.bin should be deleted"
+    assert not (
+        ota_dir / "subdir" / "config.json"
+    ).exists(), "boot/ota/subdir/config.json should be deleted"
 
     # Check that boot/grub files are also deleted
     assert not (grub_dir / "grub.cfg").exists(), "boot/grub/grub.cfg should be deleted"
@@ -742,8 +755,12 @@ def test_boot_ota_pattern_without_ignore(tmp_path):
     )
 
     # When /boot/ota/ is NOT in ignore patterns, files should be preserved
-    assert (ota_dir / "firmware.bin").exists(), "boot/ota/firmware.bin should be preserved"
-    assert (ota_dir / "subdir" / "config.json").exists(), "boot/ota/subdir/config.json should be preserved"
+    assert (
+        ota_dir / "firmware.bin"
+    ).exists(), "boot/ota/firmware.bin should be preserved"
+    assert (
+        ota_dir / "subdir" / "config.json"
+    ).exists(), "boot/ota/subdir/config.json should be preserved"
 
     # Check that boot/grub files are deleted (they are in ignore patterns)
     assert not (grub_dir / "grub.cfg").exists(), "boot/grub/grub.cfg should be deleted"
@@ -760,6 +777,7 @@ def test_boot_ota_pattern_without_ignore(tmp_path):
     # Verify grub entries are not in output
     assert "boot/grub" not in dirs_content
     assert "boot/grub/grub.cfg" not in regulars_content
+
 
 @pytest.mark.parametrize(
     "boot_ota_path",
@@ -781,5 +799,9 @@ def test_boot_ota_regex_pattern_matching(tmp_path, boot_ota_path):
     relative_path = boot_ota_path.lstrip("/")
 
     # The pattern should match both absolute and relative paths
-    assert pattern.search(boot_ota_path) is not None, f"Pattern should match {boot_ota_path}"
-    assert pattern.search(relative_path) is not None, f"Pattern should match {relative_path}"
+    assert (
+        pattern.search(boot_ota_path) is not None
+    ), f"Pattern should match {boot_ota_path}"
+    assert (
+        pattern.search(relative_path) is not None
+    ), f"Pattern should match {relative_path}"
