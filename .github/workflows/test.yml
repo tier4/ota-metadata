@@ -48,7 +48,7 @@ jobs:
           python -m pip install -q -r metadata/ota_metadata/tests/requirements.txt
       - name: Lint codes without modification
         run: |
-          $pythonLocation/bin/python -m black metadata/ota_metadata --check --diff
+          $pythonLocation/bin/python -m black metadata/ota_metadata --check
       - name: Lint codes for syntax check
         run: |
           $pythonLocation/bin/python -m flake8 metadata/ota_metadata

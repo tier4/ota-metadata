@@ -19,9 +19,6 @@ import os
 import re
 import glob
 import argparse
-import shutil
-import time
-
 import zstandard
 import igittigitt
 from hashlib import sha256
@@ -112,53 +109,30 @@ def _join_mode_uid_gid(base, path, nlink=False):
 
 
 def ignore_rules(target_dir, ignore_file):
-    ignore_parser = igittigitt.IgnoreParser()
+    parser = igittigitt.IgnoreParser()
     with open(ignore_file) as f:
         for line in f:
             line = line.rstrip("\n")
-            ignore_parser.add_rule(line, base_path=target_dir)
-    return ignore_parser
-
-
-def _delete_file_folder(path: Path) -> bool:
-    """
-    Delete a file or folder at the given path.
-    If the path is a file, it will be deleted.
-    If the path is a directory, it will be deleted recursively.
-    If the path does not exist, it will return False.
-    If an error occurs during deletion, it will print the error and raise the exception.
-    """
-    try:
-        if not path.exists():
-            return False
-        elif path.is_file():
-            path.unlink(missing_ok=True)
-            return True
-        elif path.is_dir():
-            shutil.rmtree(path)
-            return True
-        return False
-    except Exception as e:
-        print(f"ERROR: Failed to delete {path}. Error: {e}")
-        raise
+            parser.add_rule(line, base_path=target_dir)
+    return parser
 
 
 def _get_latest_kernel_version(boot_dir: Path):
     kfiles_path = str(boot_dir / "vmlinuz-*.*.*-*-*")
 
+    pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
+
+    def compare(left, right):
+        ma_l = pa.match(Path(left).name)
+        ma_r = pa.match(Path(right).name)
+        ver_l = version.parse(ma_l["version"])
+        ver_r = version.parse(ma_r["version"])
+        return 1 if ver_l > ver_r else -1
+
     kfile_glob = [f for f in glob.glob(kfiles_path) if not Path(f).is_symlink()]
-    kfiles = sorted(kfile_glob, key=cmp_to_key(_compare), reverse=True)
+    kfiles = sorted(kfile_glob, key=cmp_to_key(compare), reverse=True)
 
     return Path(kfiles[0])  # latest
-
-
-def _compare(left, right):
-    pa = re.compile(r"vmlinuz-(?P<version>\d+\.\d+\.\d+-\d+)(?P<suffix>.*)")
-    ma_l = pa.match(Path(left).name)
-    ma_r = pa.match(Path(right).name)
-    ver_l = version.parse(ma_l["version"])
-    ver_r = version.parse(ma_r["version"])
-    return 1 if ver_l > ver_r else -1
 
 
 def _list_non_latest_kernels(boot_dir: Path):
@@ -213,7 +187,6 @@ def gen_metadata(
     cmpr_ratio: float,
     filesize_threshold: int,
 ):
-    start = time.time()
     p = Path(target_dir)
     target_abs = Path(os.path.abspath(target_dir))
     ignore = ignore_rules(target_dir, ignore_file)
@@ -250,9 +223,6 @@ def gen_metadata(
     additional_regular_set = set()
     additional_dir_set = set()
 
-    # to delete
-    ignored_paths_to_delete_abs = set()
-
     # remove kernels under /boot directory other than latest
     non_latest_kernels = _list_non_latest_kernels(p / "boot")
     dirs = []
@@ -273,10 +243,6 @@ def gen_metadata(
                             for _file_pattern in build_folder_patterns
                         ):
                             additional_regular_set.add(relative_path)
-                        else:
-                            ignored_paths_to_delete_abs.add(Path(f).resolve())
-                    else:
-                        ignored_paths_to_delete_abs.add(Path(f).resolve())
                 continue
             if str(f) in non_latest_kernels:
                 print(f"INFO: {f} is not a latest kernel. skip.")
@@ -304,6 +270,7 @@ def gen_metadata(
         symlinks.extend(additional_symlink_set)
 
     for d in symlinks:
+
         symlink_target_path = os.readlink(os.path.join(target_dir, d))
         symlink_entry = (
             f"{_join_mode_uid_gid(target_dir, d)},"
@@ -314,7 +281,7 @@ def gen_metadata(
 
         # Do nothing if ignore file does not have the following paths defined
         # "home/autoware/*build" or "home/autoware/*/src" definition
-        if not check_symlink:
+        if check_symlink is False:
             continue
 
         # Check the symlink target file
@@ -340,7 +307,6 @@ def gen_metadata(
         if ignore.match(Path(target_path_abs)):
             path_names = symlink_target_path.split(os.sep)
             path_to_check = target_dir
-
             for path_name in path_names:
                 if path_name:
                     path_to_check = os.path.join(path_to_check, path_name)
@@ -441,24 +407,6 @@ def gen_metadata(
 
     with open(os.path.join(output_dir, total_regular_size_file), "w") as _f:
         _f.write(str(total_regular_size))
-
-    # probably not necessary to check again, but just in case
-    if check_symlink:
-        for regular in regulars:
-            regular_abs_path = Path(os.path.join(target_dir, regular)).resolve()
-            ignored_paths_to_delete_abs.discard(regular_abs_path)
-        for symlink in symlinks:
-            symlink_abs_path = Path(os.path.join(target_dir, symlink)).resolve()
-            ignored_paths_to_delete_abs.discard(symlink_abs_path)
-
-        # delete ignored files
-        for delete_path in ignored_paths_to_delete_abs:
-            _delete_file_folder(delete_path)
-
-    # Calculate the end time and time taken
-    end = time.time()
-    length = end - start
-    print("It took", length, "seconds!")
 
 
 if __name__ == "__main__":
