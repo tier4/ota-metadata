@@ -240,11 +240,10 @@ def gen_metadata(
     )
 
     # Special Patterns that we need to check and add files.
-    pattern_to_keep = [
+    build_folder_patterns = [
         re.compile(r"home/autoware/[^/]*/build/.*/hook/.*"),
         re.compile(r"home/autoware/[^/]*/build/.*/.*.egg-info/.*"),
         re.compile(r"home/autoware/[^/]*/build/.*/.*.so$"),
-        re.compile(r"/?boot/ota(?:/.*)?$"),
     ]
 
     additional_symlink_set = set()
@@ -271,7 +270,7 @@ def gen_metadata(
                             additional_dir_set.add(relative_path)
                         elif f.is_file() and any(
                             _file_pattern.search(relative_path)
-                            for _file_pattern in pattern_to_keep
+                            for _file_pattern in build_folder_patterns
                         ):
                             additional_regular_set.add(relative_path)
                         else:
@@ -452,8 +451,14 @@ def gen_metadata(
             symlink_abs_path = Path(os.path.join(target_dir, symlink)).resolve()
             ignored_paths_to_delete_abs.discard(symlink_abs_path)
 
+        boot_ota_pattern = re.compile(r".*/boot/ota(?:/.*)?$")
         # delete ignored files
         for delete_path in ignored_paths_to_delete_abs:
+            # T4DEV-31869: Don't delete paths matching /boot/ota pattern
+            # "/boot/ota" is in ignore list,but when making USB installer, this forcefully included
+            # Therefore, we should keep the folder and files under it.
+            if boot_ota_pattern.search(str(delete_path)):
+                continue
             _delete_file_folder(delete_path)
 
     # Calculate the end time and time taken
