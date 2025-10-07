@@ -269,13 +269,13 @@ def gen_metadata(
                             additional_symlink_set.add(relative_path)
                         elif f.is_dir():
                             additional_dir_set.add(relative_path)
-                        elif f.is_file() and any(
-                            _file_pattern.search(relative_path)
-                            for _file_pattern in pattern_to_keep
-                        ):
-                            additional_regular_set.add(relative_path)
                         else:
                             ignored_paths_to_delete_abs.add(Path(f).resolve())
+                    elif f.is_file() and any(
+                        _file_pattern.search(relative_path)
+                        for _file_pattern in pattern_to_keep
+                    ):
+                        additional_regular_set.add(relative_path)
                     else:
                         ignored_paths_to_delete_abs.add(Path(f).resolve())
                 continue
