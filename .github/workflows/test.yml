@@ -20,7 +20,7 @@ jobs:
       - name: Execute pytest with coverage trace under ota-test_base container
         run: |
           set -o pipefail
-          $pythonLocation/bin/python -m pytest --cov=metadata/ota_metadata metadata/ota_metadata/tests | tee pytest-coverage.txt
+          $pythonLocation/bin/python -m pytest --cov=metadata/ota_metadata --cov-report=xml --cov-report=term metadata/ota_metadata/tests | tee pytest-coverage.txt
       # export the coverage report to the comment!
       - name: Add coverage report to PR comment
         continue-on-error: true
@@ -28,6 +28,11 @@ jobs:
         with:
           pytest-coverage-path: ./pytest-coverage.txt
           junitxml-path: ./pytest.xml
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v6.0.0
+        continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   python_lint_check:
     runs-on: ubuntu-latest
