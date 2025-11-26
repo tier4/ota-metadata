@@ -1,6 +1,25 @@
 name: test CI
 
-on: [pull_request]
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      # NOTE(20241016): this is a workaround for PR with head
+      #   updated by gen_requirements_txt workflow
+      - review_requested
+      - assigned
+  push:
+    branches:
+      - main
+    paths:
+      - "metadata/ota_metadata/**"
+      - ".github/workflows/test.yml"
+  # allow the test CI to be manually triggerred
+  workflow_dispatch:
 
 jobs:
   pytest_with_coverage:
