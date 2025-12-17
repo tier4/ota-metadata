@@ -186,8 +186,7 @@ def test_gen_metadata_method(tmp_path):
         in (tmp_path / output_folder / regular_file).read_text()
     )
     assert (
-        not str(os.path.relpath(src_file2, tmp_path))
-        in (tmp_path / output_folder / regular_file).read_text()
+        str(os.path.relpath(src_file2, tmp_path)) not in (tmp_path / output_folder / regular_file).read_text()
     )
 
 
