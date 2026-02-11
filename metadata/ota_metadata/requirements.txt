@@ -1,5 +1,5 @@
 igittigitt@https://github.com/tier4/igittigitt/releases/download/v2.0.4-patched/igittigitt-2.0.4-py3-none-any.whl
-cryptography==46.0.2
+cryptography==46.0.5
 tqdm==4.67.1
 zstandard==0.25.0
 packaging==21.3
