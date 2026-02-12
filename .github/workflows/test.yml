@@ -21,6 +21,9 @@ on:
   # allow the test CI to be manually triggerred
   workflow_dispatch:
 
+permissions:
+  pull-requests: write
+
 jobs:
   pytest_with_coverage:
     runs-on: ubuntu-latest
@@ -39,7 +42,7 @@ jobs:
       - name: Execute pytest with coverage trace under ota-test_base container
         run: |
           set -o pipefail
-          $pythonLocation/bin/python -m pytest --cov=metadata/ota_metadata --cov-report=xml --cov-report=term metadata/ota_metadata/tests | tee pytest-coverage.txt
+          $pythonLocation/bin/python -m pytest --cov=metadata/ota_metadata --cov-report=xml --cov-report=term --junitxml=pytest.xml metadata/ota_metadata/tests | tee pytest-coverage.txt
       # export the coverage report to the comment!
       - name: Add coverage report to PR comment
         uses: MishaKav/pytest-coverage-comment@v1.1.40
